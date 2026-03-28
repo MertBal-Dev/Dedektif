@@ -622,7 +622,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           accusationCount: prev.accusationCount + 1,
           score: Math.max(0, prev.score - 300),
         }));
-        
+
         return { correct: false, result };
       }
     } catch (error) {
@@ -659,10 +659,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       solvePuzzle,
       findEvidence,
       interrogate,
-    makeAccusation,
-    confrontationResult,
-    clearConfrontation,
-    setSuspicionLevel,
+      makeAccusation,
+      confrontationResult,
+      clearConfrontation,
+      setSuspicionLevel,
       addNotebookEntry,
       useHint,
       exitCase,
