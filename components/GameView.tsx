@@ -1729,7 +1729,7 @@ function ConfrontationOverlay({
   // ── Müzik ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     const audio = new Audio(
-      'https://www.fesliyanstudios.com/play-music/mp3-file/2/2019-06-17_-_Villainous_-_David_Fesliyan.mp3'
+      'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3'
     );
     audio.loop = true;
     audio.volume = isCorrect ? 0.25 : 0.35;
