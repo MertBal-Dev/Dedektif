@@ -7,7 +7,7 @@ import { useGame } from '@/features/useGame';
 import {
   Book, Users, Search, Puzzle as PuzzleIcon, Gavel, ArrowLeft,
   Fingerprint, MessageSquare, MapPin, Briefcase, Info, Send, Loader2,
-  Lock, ChevronDown, ChevronUp, Star, AlertTriangle, Trophy,
+  Lock, ChevronDown, ChevronUp, Star, AlertTriangle, Trophy, Plus,
   NotebookPen, Eye, EyeOff, Clock, CheckCircle2, XCircle,
   Skull, BookOpen, X, Zap, Target, HelpCircle,
   ScanSearch, User, Hash, ArrowRight, Volume2, VolumeX,
@@ -20,6 +20,111 @@ import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+// ─── Typewriter (Plan Madde 3) ────────────────────────────────────────────────
+// Karakterin cevabını harf harf yazıyormuş gibi gösterir.
+// onCharacter: her `charInterval` karakterde bir tetiklenir (daktilo sesi için)
+function Typewriter({
+  text,
+  speed = 18,
+  onDone,
+  onCharacter,
+  charInterval = 6,
+}: {
+  text: string;
+  speed?: number;
+  onDone?: () => void;
+  onCharacter?: () => void;
+  charInterval?: number;
+}) {
+  const [displayed, setDisplayed] = useState('');
+  const [done, setDone] = useState(false);
+  const indexRef = useRef(0);
+  const onDoneRef = useRef(onDone);
+  const onCharRef = useRef(onCharacter);
+  onDoneRef.current = onDone;
+  onCharRef.current = onCharacter;
+
+  useEffect(() => {
+    setDisplayed('');
+    setDone(false);
+    indexRef.current = 0;
+
+    if (!text) return;
+
+    const interval = setInterval(() => {
+      indexRef.current += 1;
+      setDisplayed(text.slice(0, indexRef.current));
+
+      // Her charInterval karakterde bir ses tetikle
+      if (indexRef.current % charInterval === 0) {
+        onCharRef.current?.();
+      }
+
+      if (indexRef.current >= text.length) {
+        clearInterval(interval);
+        setDone(true);
+        onDoneRef.current?.();
+      }
+    }, speed);
+
+    return () => clearInterval(interval);
+  }, [text, speed, charInterval]);
+
+  return (
+    <span>
+      {displayed}
+      {!done && (
+        <span className="inline-block w-[2px] h-[1em] bg-amber-400/70 align-middle ml-0.5 animate-pulse" />
+      )}
+    </span>
+  );
+}
+
+// ─── useSound (Plan Madde 4) ──────────────────────────────────────────────────
+// Ses motorunu Web Audio API ile yönetir; Dış ortamdan dosya çekmez (0 Byte Asset).
+// Bu sayede "Access Denied" veya "404" sorunları yaşanmaz.
+type SoundKey = 'click' | 'discover' | 'success';
+
+function useSound() {
+  const play = useCallback((key: SoundKey, volume?: number) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      const playTone = (freq: number, type: OscillatorType, duration: number, vol: number) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+        // Eğer dışarıdan volume gelmişse onu kullan, yoksa varsayılanı kullan
+        const finalVol = volume !== undefined ? volume : vol;
+        g.gain.setValueAtTime(finalVol, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+        osc.connect(g);
+        g.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      };
+
+      if (key === 'click') {
+        playTone(600, 'sine', 0.08, 0.04);
+      } else if (key === 'discover') {
+        playTone(400, 'triangle', 0.3, 0.04);
+        setTimeout(() => playTone(800, 'triangle', 0.3, 0.03), 50);
+      } else if (key === 'success') {
+        playTone(523, 'sine', 0.5, 0.04); // C5
+        setTimeout(() => playTone(659, 'sine', 0.5, 0.04), 100); // E5
+        setTimeout(() => playTone(783, 'sine', 0.5, 0.04), 200); // G5
+      }
+    } catch (e) {
+      console.warn("Sound play failed", e);
+    }
+  }, []);
+  return { play };
 }
 
 // ─── CaseImage ────────────────────────────────────────────────────────────────
@@ -92,7 +197,7 @@ function LightboxModal({ src, alt, onClose }: { src: string; alt: string; onClos
 
   return (
     <div
-      className="fixed inset-0 bg-black/97 z-[500] flex flex-col items-center justify-center p-4 md:p-10 backdrop-blur-2xl"
+      className="fixed inset-0 bg-black/97 z-[500] flex flex-col items-center justify-center p-3 sm:p-5 md:p-10 backdrop-blur-2xl"
       onClick={onClose}
     >
       <motion.div
@@ -175,18 +280,18 @@ function DifficultyBadge({ level }: { level?: 'easy' | 'medium' | 'hard' }) {
 
 function ScoreWidget({ score, foundCount, solvedPuzzles }: { score: number; foundCount: number; solvedPuzzles: number }) {
   return (
-    <div className="flex items-center gap-4 bg-[#0a0a0a] border border-white/5 px-4 py-2 rounded-full">
-      <div className="flex items-center gap-1.5 text-accent">
-        <Trophy size={13} />
-        <span className="font-mono font-bold text-xs">{score.toLocaleString()}</span>
+    <div className="flex items-center gap-2 sm:gap-3 bg-[#0a0a0a] border border-white/5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full">
+      <div className="flex items-center gap-1 sm:gap-1.5 text-accent">
+        <Trophy size={12} />
+        <span className="font-mono font-bold text-[11px] sm:text-xs">{score.toLocaleString()}</span>
       </div>
       <div className="w-px h-3 bg-white/10" />
-      <div className="flex items-center gap-1.5 text-gray-400">
-        <Search size={12} /><span className="text-xs font-mono">{foundCount}</span>
+      <div className="flex items-center gap-1 text-gray-400">
+        <Search size={11} /><span className="text-[11px] font-mono">{foundCount}</span>
       </div>
       <div className="w-px h-3 bg-white/10" />
-      <div className="flex items-center gap-1.5 text-gray-400">
-        <PuzzleIcon size={12} /><span className="text-xs font-mono">{solvedPuzzles}</span>
+      <div className="flex items-center gap-1 text-gray-400">
+        <PuzzleIcon size={11} /><span className="text-[11px] font-mono">{solvedPuzzles}</span>
       </div>
     </div>
   );
@@ -203,7 +308,9 @@ export default function GameView({ caseData }: { caseData: Case }) {
     caseResolution, setCaseResolution,
     notification, showNotification,
     confrontationResult, clearConfrontation,
+    isLoading, loadingMessage,
   } = useGame();
+  const { play } = useSound(); // Plan Madde 4
 
   const [selectedSuspect, setSelectedSuspect] = useState<Character | null>(null);
   const [selectedAccusationSuspect, setSelectedAccusationSuspect] = useState<Character | null>(null);
@@ -212,6 +319,18 @@ export default function GameView({ caseData }: { caseData: Case }) {
 
   const foundCount = gameState.foundEvidenceIds.length;
   const solvedPuzzles = gameState.unlockedClueIds.length;
+
+  // ── Ses kaplama fonksiyonları (Plan Madde 4) ─────────────────────────────────
+  const findEvidenceWithSound = useCallback((id: string) => {
+    findEvidence(id);
+    play('discover');
+  }, [findEvidence, play]);
+
+  const solvePuzzleWithSound = useCallback(async (id: string, answer: string) => {
+    const result = await solvePuzzle(id, answer);
+    if (result.isCorrect) play('success');
+    return result;
+  }, [solvePuzzle, play]);
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'story', label: 'Vaka Dosyası', icon: <Book size={16} /> },
@@ -222,7 +341,7 @@ export default function GameView({ caseData }: { caseData: Case }) {
   ];
 
   return (
-    <div className="min-h-screen w-full bg-[#050505] flex flex-col items-center py-6 px-3 md:px-6 relative selection:bg-primary/30 selection:text-white">
+    <div className="min-h-screen w-full bg-[#050505] flex flex-col items-center pb-24 lg:pb-8 pt-3 sm:pt-5 px-3 sm:px-4 md:px-6 relative selection:bg-primary/30 selection:text-white">
       <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
 
       {/* Toast */}
@@ -233,70 +352,66 @@ export default function GameView({ caseData }: { caseData: Case }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             className={cn(
-              "fixed top-6 left-1/2 -translate-x-1/2 z-[200] px-6 py-3.5 rounded-full text-sm font-bold flex items-center gap-3 shadow-2xl border backdrop-blur-md",
-              notification.type === 'success' && "bg-green-950/80 border-green-500/40 text-green-300",
-              notification.type === 'info' && "bg-[#1a1200]/80 border-accent/40 text-accent",
-              notification.type === 'warning' && "bg-red-950/80 border-red-500/40 text-red-300",
+              "fixed top-6 sm:top-8 left-1/2 -translate-x-1/2 z-[2000] px-5 py-3 rounded-full text-xs sm:text-sm font-bold flex items-center gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border backdrop-blur-xl max-w-[90vw] w-max min-w-[280px] sm:min-w-[320px] justify-center",
+              notification.type === 'success' && "bg-green-950/90 border-green-500/50 text-green-300",
+              notification.type === 'info' && "bg-[#1a1200]/90 border-accent/50 text-accent",
+              notification.type === 'warning' && "bg-red-950/90 border-red-500/50 text-red-300",
             )}
           >
-            {notification.type === 'success' && <CheckCircle2 size={18} />}
-            {notification.type === 'info' && <Info size={18} />}
-            {notification.type === 'warning' && <AlertTriangle size={18} />}
-            {notification.text}
+            {notification.type === 'success' && <CheckCircle2 size={14} className="flex-shrink-0" />}
+            {notification.type === 'info' && <Info size={14} className="flex-shrink-0" />}
+            {notification.type === 'warning' && <AlertTriangle size={14} className="flex-shrink-0" />}
+            <span className="truncate">{notification.text}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Top bar */}
-      <div className="w-full max-w-7xl flex justify-between items-center mb-6 relative z-10">
+      <div className="w-full max-w-7xl flex justify-between items-center mb-3 sm:mb-5 relative z-10">
         <button
           onClick={exitCase}
-          className="flex items-center gap-2 text-gray-500 hover:text-white transition-all text-[10px] uppercase tracking-[0.2em] font-bold bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg border border-white/5"
+          className="flex items-center gap-1.5 text-gray-500 hover:text-white transition-all text-[10px] uppercase tracking-[0.15em] font-bold bg-white/5 hover:bg-white/10 px-3 py-2 sm:px-4 rounded-lg border border-white/5"
         >
-          <ArrowLeft size={14} /> Kapat
+          <ArrowLeft size={13} /> <span className="hidden sm:inline">Kapat</span>
         </button>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <ScoreWidget score={gameState.score} foundCount={foundCount} solvedPuzzles={solvedPuzzles} />
-          <div className="text-right hidden sm:block">
+          <div className="text-right hidden md:block min-w-0">
             <p className="text-[9px] uppercase tracking-[0.3em] text-accent font-bold mb-0.5">Aktif Soruşturma</p>
-            <h2 className="text-base font-serif text-white leading-tight">{caseData.title}</h2>
+            <h2 className="text-sm font-serif text-white leading-tight truncate max-w-[180px] lg:max-w-[240px]">{caseData.title}</h2>
           </div>
         </div>
       </div>
 
       {/* Layout */}
-      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 relative z-10">
-        {/* Sidebar / Mobile Tabs */}
-        <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 no-scrollbar">
+      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-3 sm:gap-5 relative z-10">
+
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:flex lg:flex-col gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "group flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 border relative overflow-hidden flex-shrink-0 lg:flex-shrink",
+                "group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 border relative overflow-hidden",
                 activeTab === tab.id
-                  ? "bg-primary/10 border-primary/40 text-white shadow-[0_0_25px_rgba(139,0,0,0.15)] scale-[1.02]"
+                  ? "bg-primary/10 border-primary/40 text-white shadow-[0_0_25px_rgba(139,0,0,0.15)]"
                   : "bg-[#0a0a0a] border-white/5 text-gray-500 hover:bg-white/5 hover:border-white/10 hover:text-gray-300"
               )}
             >
               {activeTab === tab.id && (
-                <motion.div layoutId="activeTab" className="absolute left-0 lg:left-0 top-0 bottom-0 w-1 lg:w-1 bg-primary hidden lg:block" />
-              )}
-              {activeTab === tab.id && (
-                <motion.div layoutId="activeTabMobile" className="absolute left-0 right-0 bottom-0 h-0.5 bg-primary lg:hidden" />
+                <motion.div layoutId="activeTabDesktop" className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
               )}
               <div className={cn("flex-shrink-0 transition-colors", activeTab === tab.id ? "text-primary" : "")}>{tab.icon}</div>
-              <span className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">{tab.label}</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="ml-auto lg:ml-auto bg-accent/10 text-accent text-[9px] font-mono px-2 py-0.5 rounded-full border border-accent/20">
+                <span className="ml-auto bg-accent/10 text-accent text-[9px] font-mono px-2 py-0.5 rounded-full border border-accent/20">
                   {tab.badge}
                 </span>
               )}
             </button>
           ))}
-
-          {/* Case info */}
-          <div className="hidden lg:block p-5 bg-[#0a0a0a] border border-white/5 rounded-xl space-y-4 text-[10px] text-gray-400">
+          <div className="p-4 bg-[#0a0a0a] border border-white/5 rounded-xl space-y-4 text-[10px] text-gray-400 mt-1">
             <p className="text-accent/80 font-bold uppercase tracking-[0.2em]">Vaka Özeti</p>
             <div className="space-y-2">
               {[
@@ -304,16 +419,12 @@ export default function GameView({ caseData }: { caseData: Case }) {
                 { icon: <Skull size={11} className="text-primary/70" />, label: 'Ölüm', val: caseData.causeOfDeath || '?' },
                 { icon: <MapPin size={11} className="text-blue-400/70" />, label: 'Konum', val: caseData.setting || '?' },
               ].map(item => (
-                <div key={item.label} className="flex items-start gap-2.5 bg-black/40 p-2.5 rounded-lg border border-white/5">
+                <div key={item.label} className="flex items-start gap-2 bg-black/40 p-2 rounded-lg border border-white/5">
                   {item.icon}
-                  <div>
-                    <span className="block text-[8px] text-gray-600 uppercase">{item.label}</span>
-                    <span className="text-gray-300">{item.val}</span>
-                  </div>
+                  <div className="min-w-0"><span className="block text-[8px] text-gray-600 uppercase">{item.label}</span><span className="text-gray-300 break-words text-[10px]">{item.val}</span></div>
                 </div>
               ))}
             </div>
-
             <div className="pt-3 border-t border-white/5 space-y-3">
               <p className="text-accent/80 font-bold uppercase tracking-[0.2em]">İlerleme</p>
               {[
@@ -321,15 +432,9 @@ export default function GameView({ caseData }: { caseData: Case }) {
                 { label: 'Bulmacalar', val: solvedPuzzles, total: caseData.puzzles.length, color: 'bg-primary' },
               ].map(item => (
                 <div key={item.label}>
-                  <div className="flex justify-between mb-1.5 text-[9px]">
-                    <span className="uppercase tracking-wider">{item.label}</span>
-                    <span className="text-white font-mono">{item.val}/{item.total}</span>
-                  </div>
+                  <div className="flex justify-between mb-1.5 text-[9px]"><span className="uppercase tracking-wider">{item.label}</span><span className="text-white font-mono">{item.val}/{item.total}</span></div>
                   <div className="h-1.5 bg-black rounded-full overflow-hidden border border-white/5">
-                    <div
-                      className={cn("h-full transition-all duration-700 rounded-full", item.color)}
-                      style={{ width: `${(item.val / Math.max(1, item.total)) * 100}%` }}
-                    />
+                    <div className={cn("h-full transition-all duration-700 rounded-full", item.color)} style={{ width: `${(item.val / Math.max(1, item.total)) * 100}%` }} />
                   </div>
                 </div>
               ))}
@@ -338,15 +443,15 @@ export default function GameView({ caseData }: { caseData: Case }) {
         </div>
 
         {/* Content */}
-        <div className="min-h-[75vh] bg-[#0a0a0a]/90 border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative">
+        <div className="min-h-[60vh] lg:min-h-[78vh] bg-[#0a0a0a]/90 border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="p-6 md:p-10 overflow-y-auto max-h-[85vh] custom-scrollbar"
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="p-4 sm:p-6 lg:p-8 overflow-y-auto max-h-[calc(100vh-220px)] lg:max-h-[calc(100vh-130px)] custom-scrollbar"
             >
               {activeTab === 'story' && (
                 <CaseStory caseData={caseData} foundEvidenceCount={foundCount}
@@ -369,8 +474,9 @@ export default function GameView({ caseData }: { caseData: Case }) {
                 <EvidenceBoard
                   evidence={caseData.evidence}
                   foundIds={gameState.foundEvidenceIds}
-                  onFind={(id) => { findEvidence(id); showNotification('success', 'Yeni kanıt bulundu! +150 puan'); }}
+                  onFind={(id) => { findEvidenceWithSound(id); showNotification('success', 'Yeni kanıt bulundu! +150 puan'); }}
                   onImageClick={(src, alt) => setLightbox({ src, alt })}
+                  allPuzzles={caseData.puzzles}
                 />
               )}
               {activeTab === 'puzzles' && (
@@ -378,7 +484,7 @@ export default function GameView({ caseData }: { caseData: Case }) {
                   puzzles={caseData.puzzles}
                   solvedIds={gameState.unlockedClueIds}
                   onSolve={async (id, ans) => {
-                    const result = await solvePuzzle(id, ans);
+                    const result = await solvePuzzleWithSound(id, ans);
                     if (result.isCorrect) showNotification('success', 'Bulmaca çözüldü! Yeni kanıt açıldı. +puan');
                     return result;
                   }}
@@ -396,7 +502,40 @@ export default function GameView({ caseData }: { caseData: Case }) {
             </motion.div>
           </AnimatePresence>
         </div>
-      </div>
+      </div>{/* /Layout */}
+
+      {/* ── Mobile Bottom Navigation ────────────────────────────────────────── */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-[150] bg-[#080808]/95 backdrop-blur-xl border-t border-white/10 px-1 safe-area-bottom">
+        <div className="flex items-center justify-around">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex flex-col items-center gap-1 py-2.5 px-2 flex-1 relative transition-all duration-200",
+                activeTab === tab.id ? "text-white" : "text-gray-600 hover:text-gray-400"
+              )}
+            >
+              {activeTab === tab.id && (
+                <motion.div layoutId="mobileTabIndicator" className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />
+              )}
+              <div className="relative">
+                <div className={cn("transition-colors", activeTab === tab.id ? "text-primary" : "")}>
+                  {tab.icon}
+                </div>
+                {tab.badge !== undefined && tab.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-accent text-black text-[8px] font-bold rounded-full flex items-center justify-center">
+                    {tab.badge > 9 ? '9+' : tab.badge}
+                  </span>
+                )}
+              </div>
+              <span className={cn("text-[9px] font-bold uppercase tracking-wider leading-none", activeTab === tab.id ? "text-white" : "text-gray-600")}>
+                {tab.label === 'Vaka Dosyası' ? 'Vaka' : tab.label === 'Not Defteri' ? 'Notlar' : tab.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </nav>
 
       {/* Modals */}
       <AnimatePresence>
@@ -443,8 +582,9 @@ export default function GameView({ caseData }: { caseData: Case }) {
             foundEvidenceIds={gameState.foundEvidenceIds}
             onClose={() => setSelectedAccusationSuspect(null)}
             onConfirm={async (evidenceIds: string[]) => {
+              const suspectId = selectedAccusationSuspect.id;
+              await makeAccusation(suspectId, evidenceIds);
               setSelectedAccusationSuspect(null);
-              await makeAccusation(selectedAccusationSuspect.id, evidenceIds);
               // confrontationResult context'te set edildi, ConfrontationOverlay açılacak
             }}
           />
@@ -486,12 +626,86 @@ export default function GameView({ caseData }: { caseData: Case }) {
 
       <style dangerouslySetInnerHTML={{
         __html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+        @media (max-width: 640px) {
+          .mobile-full-input { font-size: 16px !important; }
+        }
       `}} />
+
+      {/* Global Loading Overlay (Plan Madde 1) */}
+      <AnimatePresence>
+        {isLoading && (
+          <LoadingOverlay message={loadingMessage || 'Değerlendiriliyor...'} />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+// ─── LoadingOverlay ───────────────────────────────────────────────────────────
+function LoadingOverlay({ message }: { message: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[1000] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md"
+    >
+      {/* Background ambience */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/10 blur-[120px] rounded-full animate-pulse" />
+      </div>
+
+      <div className="relative z-10 flex flex-col items-center">
+        {/* Animated Loader */}
+        <div className="relative w-24 h-24 mb-10">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 border-t-2 border-primary/40 rounded-full"
+          />
+          <motion.div
+            animate={{ rotate: -360 }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-2 border-b-2 border-accent/30 rounded-full"
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="text-white/20 animate-spin" size={32} strokeWidth={1} />
+          </div>
+        </div>
+
+        {/* Message */}
+        <motion.div
+          initial={{ y: 10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="text-center space-y-3"
+        >
+          <p className="text-[10px] text-accent font-bold uppercase tracking-[0.6em] animate-pulse">
+            Soruşturma Devam Ediyor
+          </p>
+          <h3 className="text-xl font-serif text-white/90 italic px-6 max-w-md mx-auto">
+            "{message}"
+          </h3>
+          <div className="flex items-center justify-center gap-1">
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                animate={{ opacity: [0.2, 1, 0.2] }}
+                transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+                className="w-1 h-1 bg-primary rounded-full"
+              />
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -503,6 +717,19 @@ function CaseStory({ caseData, foundEvidenceCount, onImageClick }: {
   const [isReading, setIsReading] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // ── Parallax state (Plan Madde 5) ───────────────────────────────────────────
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = heroRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const cx = (e.clientX - rect.left) / rect.width - 0.5;  // -0.5 … +0.5
+    const cy = (e.clientY - rect.top) / rect.height - 0.5;
+    setMousePos({ x: cx, y: cy });
+  };
+
+  const handleMouseLeave = () => setMousePos({ x: 0, y: 0 });
 
   const toggleRead = async () => {
     if (isReading) { audioRef.current?.pause(); setIsReading(false); return; }
@@ -521,19 +748,34 @@ function CaseStory({ caseData, foundEvidenceCount, onImageClick }: {
 
   return (
     <div className="max-w-3xl mx-auto space-y-10">
-      {/* Hero image */}
+      {/* Hero image — Parallax (Plan Madde 5) */}
       <div
-        className="relative h-72 md:h-80 rounded-2xl overflow-hidden border border-white/10 group cursor-zoom-in"
+        ref={heroRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        className="relative h-48 sm:h-64 md:h-72 rounded-2xl overflow-hidden border border-white/10 group cursor-zoom-in"
         onClick={() => caseData.generatedImageUrl && onImageClick(caseData.generatedImageUrl, caseData.title)}
+        style={{ perspective: '800px' }}
       >
-        <CaseImage
-          src={caseData.generatedImageUrl}
-          alt={caseData.title}
-          fallbackSeed={caseData.title}
+        <motion.div
           className="w-full h-full"
-          contain={false}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent" />
+          animate={{
+            rotateY: mousePos.x * 6,
+            rotateX: -mousePos.y * 6,
+            scale: 1.02,
+          }}
+          transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+          style={{ transformStyle: 'preserve-3d' }}
+        >
+          <CaseImage
+            src={caseData.generatedImageUrl}
+            alt={caseData.title}
+            fallbackSeed={caseData.title}
+            className="w-full h-full"
+            contain={false}
+          />
+        </motion.div>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent pointer-events-none" />
         <div className="absolute bottom-5 left-6 z-20">
           <span className="bg-primary text-white text-[9px] uppercase font-bold tracking-widest px-3 py-1 rounded-sm mb-2 inline-block">
             {caseData.setting || 'Vaka Dosyası'}
@@ -554,10 +796,10 @@ function CaseStory({ caseData, foundEvidenceCount, onImageClick }: {
 
       {/* Victim */}
       {caseData.victim && (
-        <div className="p-5 bg-primary/5 border border-primary/20 rounded-2xl flex gap-4 relative overflow-hidden">
+        <div className="p-4 sm:p-5 bg-primary/5 border border-primary/20 rounded-2xl flex gap-3 sm:gap-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[40px] pointer-events-none" />
           <div
-            className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 border-2 border-primary/40 cursor-zoom-in group relative"
+            className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden flex-shrink-0 border-2 border-primary/40 cursor-zoom-in group relative"
             onClick={() => caseData.victim?.generatedImageUrl && onImageClick(caseData.victim.generatedImageUrl, caseData.victim.name)}
           >
             <CaseImage
@@ -630,7 +872,7 @@ function CaseStory({ caseData, foundEvidenceCount, onImageClick }: {
                 <AnimatePresence>
                   {expandedChapter === ch.id && !locked && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                      <div className="px-6 pb-6 pt-2 grid grid-cols-1 md:grid-cols-[180px_1fr] gap-5 border-t border-white/5">
+                      <div className="px-4 sm:px-6 pb-5 sm:pb-6 pt-2 grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4 border-t border-white/5">
                         <div
                           className="h-44 rounded-xl overflow-hidden border border-white/10 cursor-zoom-in group relative"
                           onClick={() => ch.generatedImageUrl && onImageClick(ch.generatedImageUrl, ch.title)}
@@ -667,10 +909,10 @@ function SuspectsBoard({ characters, suspicionLevels, onInterrogate, onAccuse, o
   return (
     <div className="space-y-6">
       <div className="border-b border-white/10 pb-5">
-        <h3 className="text-3xl font-serif text-white">Şüpheliler</h3>
+        <h3 className="text-2xl sm:text-3xl font-serif text-white">Şüpheliler</h3>
         <p className="text-gray-500 text-sm italic mt-2">Her şüpheli sorgulanabilir. İtham etmeden önce kanıtları dikkatlice değerlendirin.</p>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
         {characters.map((char, idx) => {
           const suspicion = suspicionLevels[char.id] ?? 0;
           const interrogations = interrogationCounts[char.id] ?? 0;
@@ -683,7 +925,7 @@ function SuspectsBoard({ characters, suspicionLevels, onInterrogate, onAccuse, o
               <div className="flex gap-4 p-5">
                 <div className="relative flex-shrink-0">
                   <div
-                    className={cn("w-24 h-24 rounded-xl overflow-hidden border-2 transition-all cursor-zoom-in group relative", suspicion > 66 ? "border-primary/70" : suspicion > 33 ? "border-yellow-600/50" : "border-white/10")}
+                    className={cn("w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 transition-all cursor-zoom-in group relative", suspicion > 66 ? "border-primary/70" : suspicion > 33 ? "border-yellow-600/50" : "border-white/10")}
                     onClick={() => char.generatedImageUrl && onImageClick(char.generatedImageUrl, char.name)}
                   >
                     <CaseImage src={char.generatedImageUrl} alt={char.name} fallbackSeed={char.name + char.role} className="w-full h-full" contain={true} />
@@ -760,8 +1002,9 @@ function SuspectsBoard({ characters, suspicionLevels, onInterrogate, onAccuse, o
 }
 
 // ─── EvidenceBoard ────────────────────────────────────────────────────────────
-function EvidenceBoard({ evidence, foundIds, onFind, onImageClick }: {
+function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles }: {
   evidence: Evidence[]; foundIds: string[]; onFind: (id: string) => void; onImageClick: (s: string, a: string) => void;
+  allPuzzles?: Puzzle[];
 }) {
   const [searchMode, setSearchMode] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
@@ -771,6 +1014,7 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick }: {
   const handleSearch = (id: string) => {
     const target = evidence.find(e => e.id === id);
     if (target) {
+      setSearching(id);
       setActiveInteractiveEvidence(target);
     }
   };
@@ -778,11 +1022,18 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick }: {
   const found = evidence.filter(e => foundIds.includes(e.id));
   const unfound = evidence.filter(e => !foundIds.includes(e.id));
 
+  // Sadece saha taramasıyla (interactive scene) bulunabilecek olanları filtrele
+  const searchableEvidence = unfound.filter(item =>
+    !item.isHidden &&
+    !allPuzzles?.some(p => p.unlocksEvidenceId === item.id) &&
+    item.interactiveObjects && item.interactiveObjects.length > 0
+  );
+
   return (
     <div className="space-y-7">
       <div className="flex justify-between items-end border-b border-white/10 pb-5">
         <div>
-          <h3 className="text-3xl font-serif text-white">Soruşturma Panosu</h3>
+          <h3 className="text-2xl sm:text-3xl font-serif text-white">Soruşturma Panosu</h3>
           <p className="text-gray-500 text-sm mt-1">{foundIds.length} / {evidence.length} kanıt bulundu</p>
         </div>
         <button
@@ -803,10 +1054,12 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick }: {
                 <MapPin size={11} /> Arama Bölgeleri — Bir konum seçin
               </p>
               {unfound.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-6 font-serif italic">Tüm kanıtlar bulundu!</p>
+                <p className="text-accent text-sm text-center py-6 font-serif italic font-bold tracking-widest uppercase">Tebrikler, tüm kanıtlar bulundu!</p>
+              ) : searchableEvidence.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center py-6 font-serif italic">Şu an aranabilir bölge yok. Şüphelileri sorgulayın veya bulmacaları çözün.</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {unfound.map(item => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  {searchableEvidence.map(item => (
                     <button key={item.id} onClick={() => handleSearch(item.id)} disabled={!!searching}
                       className={cn("p-4 rounded-xl border text-left transition-all",
                         searching === item.id ? "border-accent/50 bg-accent/5 animate-pulse" : "border-white/10 bg-white/3 hover:bg-white/8 hover:border-white/25"
@@ -825,12 +1078,12 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick }: {
             {/* Interactive Scene Modal for searching */}
             <AnimatePresence>
               {activeInteractiveEvidence && (
-                <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-0 sm:p-4 backdrop-blur-sm">
                   <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-                    className="max-w-4xl w-full border border-white/10 rounded-2xl overflow-hidden shadow-2xl bg-black">
+                    className="max-w-4xl w-full border-0 sm:border border-white/10 sm:rounded-2xl overflow-hidden shadow-2xl bg-black h-screen sm:h-auto">
                     <InteractiveScene
                       evidence={activeInteractiveEvidence}
-                      onClose={() => setActiveInteractiveEvidence(null)}
+                      onClose={() => { setActiveInteractiveEvidence(null); setSearching(null); }}
                     />
                   </motion.div>
                 </div>
@@ -847,7 +1100,7 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick }: {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {found.map(item => (
               <EvidenceCard key={item.id} evidence={item} isFound onImageClick={onImageClick}
-                onClick={() => setSelectedEvidence(item)} />
+                onClick={() => setSelectedEvidence(item)} allPuzzles={allPuzzles} />
             ))}
           </div>
         </div>
@@ -858,7 +1111,7 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick }: {
         <div>
           <p className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-4">Henüz Bulunamadı</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {unfound.map(item => <EvidenceCard key={item.id} evidence={item} isFound={false} onImageClick={onImageClick} />)}
+            {unfound.map(item => <EvidenceCard key={item.id} evidence={item} isFound={false} onImageClick={onImageClick} allPuzzles={allPuzzles} />)}
           </div>
         </div>
       )}
@@ -873,9 +1126,17 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick }: {
   );
 }
 
-function EvidenceCard({ evidence, isFound, onClick, onImageClick }: {
+function EvidenceCard({ evidence, isFound, onClick, onImageClick, allPuzzles }: {
   evidence: Evidence; isFound: boolean; onClick?: () => void; onImageClick: (s: string, a: string) => void;
+  allPuzzles?: Puzzle[];
 }) {
+  // Hangi kanaldan açıldığını / açılacağını belirle
+  const channelInfo = (() => {
+    if (evidence.isHidden) return { label: 'Sorgu ile Açılır', color: 'text-purple-400 border-purple-500/20 bg-purple-950/20', icon: '🔒' };
+    const linkedPuzzle = allPuzzles?.find(p => p.unlocksEvidenceId === evidence.id);
+    if (linkedPuzzle) return { label: `Bulmaca: ${linkedPuzzle.title}`, color: 'text-blue-400 border-blue-500/20 bg-blue-950/20', icon: '🧩' };
+    return { label: 'Saha Taraması', color: 'text-green-400 border-green-500/20 bg-green-950/20', icon: '🔍' };
+  })();
   return (
     <motion.div whileHover={isFound ? { scale: 1.01, y: -2 } : {}} onClick={onClick}
       className={cn("border rounded-2xl overflow-hidden transition-all relative group",
@@ -883,7 +1144,7 @@ function EvidenceCard({ evidence, isFound, onClick, onImageClick }: {
     >
       <div className="flex gap-4 p-5">
         <div
-          className={cn("w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 border-2 relative", isFound ? "border-white/10 group-hover:border-accent/30" : "border-white/5")}
+          className={cn("w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 border-2 relative", isFound ? "border-white/10 group-hover:border-accent/30" : "border-white/5")}
           onClick={(e) => { e.stopPropagation(); if (isFound && evidence.generatedImageUrl) onImageClick(evidence.generatedImageUrl, evidence.title); }}
         >
           {isFound ? (
@@ -893,7 +1154,14 @@ function EvidenceCard({ evidence, isFound, onClick, onImageClick }: {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-serif text-white mb-1 leading-tight">{evidence.title}</h4>
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h4 className="text-sm font-serif text-white leading-tight">{evidence.title}</h4>
+            {!isFound && (
+              <span className={cn("text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border flex-shrink-0", channelInfo.color)}>
+                {channelInfo.icon} {channelInfo.label}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1.5 text-[9px] text-gray-500 font-mono mb-2">
             <MapPin size={9} /><span>{evidence.location}</span>
           </div>
@@ -920,13 +1188,13 @@ function EvidenceModal({ evidence, onClose, onImageClick }: {
     <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-md" onClick={onClose}>
       <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()}
-        className="max-w-2xl w-full bg-[#0a0a0a] border border-white/15 rounded-2xl overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+        className="max-w-2xl w-full bg-[#0a0a0a] border border-white/15 rounded-2xl overflow-hidden shadow-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar mx-2 sm:mx-4"
       >
         {/* Interactive Scene Integration in Modal */}
         <div className="border-b border-white/10">
           <InteractiveScene evidence={evidence} />
         </div>
-        <div className="relative h-64 border-b border-white/10 bg-black cursor-zoom-in group"
+        <div className="relative h-48 sm:h-56 border-b border-white/10 bg-black cursor-zoom-in group"
           onClick={() => evidence.generatedImageUrl && onImageClick(evidence.generatedImageUrl, evidence.title)}
         >
           <CaseImage src={evidence.generatedImageUrl} alt={evidence.title} fallbackSeed={evidence.title} className="w-full h-full" contain={true} />
@@ -991,7 +1259,7 @@ function PuzzlesBoard({ puzzles, solvedIds, onSolve, onHint, onImageClick, found
   return (
     <div className="space-y-8">
       <div className="border-b border-white/10 pb-5">
-        <h3 className="text-3xl font-serif text-white">Zeka Oyunları & Şifreler</h3>
+        <h3 className="text-2xl sm:text-3xl font-serif text-white">Zeka Oyunları & Şifreler</h3>
         <p className="text-gray-500 text-sm mt-2 italic">
           Her bulmacayı çözmek gizli bir kanıt açar. Görselleri inceleyerek ipucu bulabilirsiniz.
         </p>
@@ -1046,9 +1314,10 @@ function PuzzleCard({ puzzle, isSolved, onSolve, onHint, onImageClick, linkedEvi
       setAiFeedback(result.feedback);
       if (result.isCorrect) {
         setStatus('correct');
+        // Başarı mesajı artık ekranda kalıcı kalır
       } else {
         setStatus('wrong');
-        setTimeout(() => { setStatus('idle'); setAiFeedback(null); }, 5000);
+        setTimeout(() => { setStatus('idle'); setAiFeedback(null); }, 10000);
       }
     } catch { setIsEvaluating(false); }
     finally { setIsEvaluating(false); }
@@ -1063,7 +1332,7 @@ function PuzzleCard({ puzzle, isSolved, onSolve, onHint, onImageClick, linkedEvi
     )}>
       {solved && <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/5 blur-[60px] rounded-full pointer-events-none" />}
 
-      <div className="p-6 md:p-8 relative z-10">
+      <div className="p-4 sm:p-6 relative z-10">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="space-y-2">
@@ -1171,17 +1440,42 @@ function PuzzleCard({ puzzle, isSolved, onSolve, onHint, onImageClick, linkedEvi
 
         {/* Solved */}
         {solved ? (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="flex items-start gap-4 bg-green-950/30 p-5 rounded-xl border border-green-500/30"
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
           >
-            <div className="bg-green-500/20 p-2 rounded-lg text-green-400 mt-1"><CheckCircle2 size={20} /></div>
-            <div>
-              <p className="text-[9px] text-green-400 uppercase font-bold tracking-widest mb-1">Şifre Çözüldü!</p>
-              <p className="text-sm text-gray-300 font-serif leading-relaxed">{puzzle.hint}</p>
+            {/* Başarı Mesajı (AI Feedback) */}
+            {aiFeedback && (
+              <div className="flex items-start gap-3 bg-green-950/20 p-4 rounded-xl border border-green-500/20">
+                <CheckCircle2 size={18} className="text-green-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-green-100 font-serif italic leading-relaxed">{aiFeedback}</p>
+              </div>
+            )}
+
+            {/* Bulmaca Ödül Metni */}
+            <div className="flex items-start gap-4 bg-white/[0.03] p-5 rounded-xl border border-white/10">
+              <div className="bg-accent/10 p-2.5 rounded-lg text-accent mt-1"><Sparkles size={20} /></div>
+              <div>
+                <p className="text-[9px] text-accent font-bold uppercase tracking-widest mb-1">Şifre Çözüldü!</p>
+                <p className="text-[14px] text-gray-200 font-serif leading-relaxed">{puzzle.rewardDescription}</p>
+              </div>
             </div>
+
+            {/* Kanıt Detayı (Dedektif Notu) */}
+            {linkedEvidence && (
+              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
+                className="flex items-start gap-4 bg-amber-950/10 p-5 rounded-xl border border-amber-900/30"
+              >
+                <div className="bg-amber-500/10 p-2.5 rounded-lg text-amber-500 mt-1"><Lightbulb size={20} /></div>
+                <div>
+                  <p className="text-[9px] text-amber-500 font-bold uppercase tracking-widest mb-1">Yeni İpucu: {linkedEvidence.title}</p>
+                  <p className="text-[13px] text-amber-200/80 font-serif italic leading-relaxed">"{linkedEvidence.clueText}"</p>
+                  <p className="text-[10px] text-gray-500 mt-2 font-mono uppercase tracking-tighter opacity-60">Bu bilgi Kanıtlar panosuna eklendi.</p>
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={handleSubmit} className="flex flex-col xs:flex-row gap-2 sm:gap-3">
             <input
               ref={inputRef}
               type="text" value={answer}
@@ -1229,14 +1523,14 @@ function Notebook({ entries, onAddEntry, caseData, foundEvidenceIds, suspicionLe
   return (
     <div className="max-w-3xl mx-auto space-y-10">
       <div className="border-b border-white/10 pb-5">
-        <h3 className="text-3xl font-serif text-white">Dedektif Defteri</h3>
+        <h3 className="text-2xl sm:text-3xl font-serif text-white">Dedektif Defteri</h3>
         <p className="text-gray-500 text-sm mt-2 italic">Bulguları birleştirin. Tüm bağlantılar buraya yazılır.</p>
       </div>
 
       {/* Summary */}
       <div className="p-6 bg-[#0a0a0a] border border-white/10 rounded-2xl space-y-5">
         <p className="text-[10px] text-accent uppercase font-bold tracking-widest flex items-center gap-2"><BookOpen size={13} /> Soruşturma Özeti</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
           {[
             { label: 'Toplanan Kanıt', val: `${foundEvidenceIds.length}/${caseData.evidence.length}` },
             { label: 'Ana Şüpheli', val: topSuspect?.name || '-', color: 'text-primary' },
@@ -1302,8 +1596,11 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
   const [isTyping, setIsTyping] = useState(false);
   const [localHistory, setLocalHistory] = useState(history);
   const [error, setError] = useState<string | null>(null);
+  // Typewriter için: son model mesajının index'ini takip et
+  const [typewriterIndex, setTypewriterIndex] = useState<number>(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { play } = useSound(); // Plan Madde 4
 
   useEffect(() => { setLocalHistory(history); }, [history.length]);
 
@@ -1327,12 +1624,18 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
     setQuestion('');
     setError(null);
     setIsTyping(true);
+    play('click'); // Plan Madde 4 — daktilo vuruş sesi
     setLocalHistory(prev => [...prev, { role: 'user', message: q }]);
 
     const response = await onInterrogate(character.id, q);
 
     if (response) {
-      setLocalHistory(prev => [...prev, { role: 'model', message: response }]);
+      setLocalHistory(prev => {
+        const next = [...prev, { role: 'model' as const, message: response }];
+        // Son eklenen model mesajını Typewriter ile göster
+        setTypewriterIndex(next.length - 1);
+        return next;
+      });
     } else {
       setError('Şüpheli cevap vermedi. Lütfen tekrar deneyin.');
       setLocalHistory(prev => prev.slice(0, -1));
@@ -1352,15 +1655,15 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
         initial={{ y: 30, opacity: 0, scale: 0.98 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 20, opacity: 0, scale: 0.98 }}
-        className="max-w-6xl w-full h-[90vh] bg-[#050505] border border-white/10 rounded-3xl flex flex-col md:flex-row shadow-[0_0_100px_rgba(0,0,0,0.8)] relative z-10 overflow-hidden"
+        className="max-w-6xl w-full h-screen sm:h-[93vh] bg-[#050505] border-0 sm:border border-white/10 sm:rounded-3xl flex flex-col md:flex-row shadow-[0_0_100px_rgba(0,0,0,0.8)] relative z-10 overflow-hidden"
       >
         {/* Close Button */}
-        <button onClick={onClose} className="absolute top-5 right-5 p-2 bg-black/40 hover:bg-black/80 rounded-full text-white/40 hover:text-white z-50 transition-all border border-white/5">
+        <button onClick={onClose} className="absolute top-3 right-3 sm:top-5 sm:right-5 p-2.5 bg-black/60 hover:bg-black/90 rounded-full text-white/60 hover:text-white z-50 transition-all border border-white/10">
           <X size={20} />
         </button>
 
         {/* Sidebar */}
-        <div className="hidden md:flex w-[320px] bg-[#080808] border-r border-white/5 p-8 flex-col shrink-0">
+        <div className="hidden md:flex w-[280px] lg:w-[320px] bg-[#080808] border-r border-white/5 p-6 lg:p-8 flex-col shrink-0">
           <div className="space-y-6 flex-1">
             <div className="relative group cursor-zoom-in shrink-0" onClick={() => character.generatedImageUrl && onImageClick(character.generatedImageUrl, character.name)}>
               <div className="w-full aspect-[4/5] rounded-xl overflow-hidden border border-white/10 bg-black shadow-2xl relative">
@@ -1436,7 +1739,17 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
                         ? "bg-gradient-to-bl from-primary/80 to-primary/60 text-white border-red-900 rounded-tr-none"
                         : "bg-[#111111] text-gray-200 border-white/5 font-serif italic rounded-tl-none prose-invert"
                     )}>
-                      {msg.message}
+                      {/* Plan Madde 3: Sadece en son model mesajında Typewriter kullan */}
+                      {msg.role === 'model' && i === typewriterIndex ? (
+                        <Typewriter
+                          text={msg.message}
+                          speed={16}
+                          charInterval={6}
+                          onCharacter={() => play('click')}
+                        />
+                      ) : (
+                        msg.message
+                      )}
                       {msg.role === 'model' && <div className="absolute -inset-1 bg-amber-500/5 blur-xl pointer-events-none" />}
                     </div>
                   </motion.div>
@@ -1473,7 +1786,7 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
                   <MessageSquare size={32} />
                 </div>
                 <h4 className="text-xl font-serif text-gray-500 italic mb-10">"Sessizlik, bir suçlunun en güvenli limanıdır..."</h4>
-                <div className="flex flex-wrap gap-3 justify-center max-w-xl mx-auto">
+                <div className="flex flex-wrap gap-2 justify-center max-w-xl mx-auto px-2">
                   {quickQuestions.map(q => (
                     <button key={q} onClick={() => { setQuestion(q); inputRef.current?.focus(); }}
                       className="px-5 py-2.5 bg-[#0a0a0a] border border-white/5 hover:border-primary/40 rounded-full text-[11px] text-gray-500 hover:text-white transition-all hover:bg-white/5"
@@ -1486,7 +1799,7 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
 
           {/* Quick Suggestions Strip */}
           {localHistory.length > 0 && (
-            <div className="px-6 py-4 flex gap-3 overflow-x-auto custom-scrollbar border-t border-white/5 bg-[#080808]">
+            <div className="hidden sm:flex px-4 sm:px-6 py-3 gap-2 sm:gap-3 overflow-x-auto custom-scrollbar border-t border-white/5 bg-[#080808]">
               {quickQuestions.map(q => (
                 <button key={q} onClick={() => { setQuestion(q); inputRef.current?.focus(); }}
                   className="flex-shrink-0 px-4 py-2 bg-white/[0.02] border border-white/5 hover:border-primary/50 rounded-lg text-[10px] text-gray-600 hover:text-white transition-all whitespace-nowrap uppercase tracking-widest font-black"
@@ -1496,7 +1809,7 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
           )}
 
           {/* Input Unit */}
-          <div className="p-6 md:p-8 border-t border-white/5 bg-[#050505]">
+          <div className="p-3 sm:p-5 md:p-6 border-t border-white/5 bg-[#050505]">
             <form onSubmit={handleSubmit} className="relative max-w-3xl mx-auto flex gap-4 w-full">
               <div className="flex-1 relative">
                 <input
@@ -1504,14 +1817,14 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
                   value={question}
                   onChange={e => setQuestion(e.target.value)}
                   placeholder={`${character.name} adlı şüpheliyi sorgula...`}
-                  className="w-full bg-[#111111] border border-white/10 rounded-2xl px-6 py-5 text-white text-[16px] placeholder:text-gray-700 focus:outline-none focus:border-red-900/50 transition-all shadow-inner font-serif"
+                  className="w-full bg-[#111111] border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-6 py-4 sm:py-5 text-white text-[16px] placeholder:text-gray-700 focus:outline-none focus:border-red-900/50 transition-all shadow-inner font-serif"
                 />
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
                   <kbd className="hidden sm:inline-block px-2 py-0.5 rounded text-[8px] bg-white/5 border border-white/10 text-gray-600 font-bold uppercase tracking-widest">Enter</kbd>
                 </div>
               </div>
               <button type="submit" disabled={isTyping || !question.trim()}
-                className="w-16 h-16 bg-primary hover:bg-red-800 disabled:bg-gray-900 duration-300 text-white rounded-2xl flex items-center justify-center shadow-[0_15px_45px_rgba(139,0,0,0.2)] transition-all shrink-0"
+                className="w-12 h-12 sm:w-14 sm:h-14 bg-primary hover:bg-red-800 disabled:bg-gray-900 duration-300 text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-[0_15px_45px_rgba(139,0,0,0.2)] transition-all shrink-0"
               >
                 {isTyping ? <Loader2 className="animate-spin" size={24} /> : <Send size={24} />}
               </button>
@@ -1571,7 +1884,7 @@ function DeductionModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ type: 'spring', damping: 22 }}
-        className="max-w-2xl w-full bg-[#0d0a05] border border-accent/30 rounded-2xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.08)] relative"
+        className="max-w-2xl w-full bg-[#0d0a05] border border-accent/30 rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.08)] relative max-h-[95vh] overflow-y-auto custom-scrollbar"
       >
         {/* Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-60 h-24 bg-accent/10 blur-[60px] rounded-full pointer-events-none" />
@@ -1628,45 +1941,107 @@ function DeductionModal({
             <p className="text-[9px] text-gray-600">Tam olarak 3 kanıt seçmelisiniz</p>
           </div>
 
+          {/* ── Yetersiz Kanıt Uyarısı (Plan Madde 1) ───────────────────────── */}
+          {foundEvidence.length < 3 && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-3 flex items-start gap-3 p-3.5 rounded-xl border border-amber-900/40 bg-amber-950/20"
+            >
+              <AlertTriangle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-bold text-amber-400 mb-0.5">
+                  Henüz yeterli kanıtın yok, dedektif!
+                </p>
+                <p className="text-[10px] text-amber-700 leading-relaxed">
+                  İtham edebilmek için en az <span className="text-amber-500 font-bold">3 kanıt</span> toplamalısın.
+                  Sahneyi ve şüphelileri daha dikkatli incele.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
           {foundEvidence.length === 0 ? (
             <div className="text-center py-10 text-gray-600 text-sm font-serif italic border border-white/5 rounded-xl bg-black/20">
               Henüz hiç kanıt toplanmadı. Önce kanıt araştırın.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-2 p-1">
               {foundEvidence.map((ev) => {
                 const isSelected = selectedEvidence.includes(ev.id);
                 return (
-                  <button
+                  <motion.button
                     key={ev.id}
                     onClick={() => toggleEvidence(ev.id)}
+                    whileHover={{ scale: !isSelected && selectedEvidence.length >= 3 ? 1 : 1.01 }}
+                    whileTap={{ scale: 0.98 }}
                     className={cn(
-                      'w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all duration-200',
+                      'relative flex flex-col items-start rounded-xl border text-left transition-all duration-300 group overflow-hidden',
                       isSelected
-                        ? 'bg-accent/10 border-accent/50 shadow-[0_0_20px_rgba(212,175,55,0.08)]'
-                        : 'bg-black/30 border-white/5 hover:border-white/15 hover:bg-white/5',
-                      !isSelected && selectedEvidence.length >= 3 ? 'opacity-40 cursor-not-allowed' : ''
+                        ? 'bg-accent/10 border-accent/60 shadow-[0_0_20px_rgba(212,175,55,0.1)]'
+                        : 'bg-black/40 border-white/10 hover:border-white/20 hover:bg-white/5',
+                      !isSelected && selectedEvidence.length >= 3 ? 'opacity-30 cursor-not-allowed grayscale' : ''
                     )}
                     disabled={!isSelected && selectedEvidence.length >= 3}
                   >
-                    <div className={cn(
-                      'w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all',
-                      isSelected ? 'border-accent bg-accent' : 'border-white/20'
-                    )}>
-                      {isSelected && <CheckCircle2 size={12} className="text-black" />}
+                    {/* Image Header */}
+                    <div className="w-full h-24 bg-black/60 relative overflow-hidden flex-shrink-0 border-b border-white/5">
+                      <CaseImage 
+                        src={ev.generatedImageUrl} 
+                        alt={ev.title} 
+                        fallbackSeed={ev.id}
+                        className="w-full h-full"
+                        contain={true}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
+                      
+                      {/* Selection Badge */}
+                      <div className={cn(
+                        'absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 z-20',
+                        isSelected 
+                          ? 'border-accent bg-accent scale-110 shadow-[0_0_10px_rgba(212,175,55,0.5)]' 
+                          : 'border-white/20 bg-black/40'
+                      )}>
+                        {isSelected ? (
+                          <CheckCircle2 size={14} className="text-black" />
+                        ) : (
+                          <Plus size={12} className="text-white/30" />
+                        )}
+                      </div>
+
+                      {/* Selection Order */}
+                      {isSelected && (
+                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-accent/90 rounded text-[9px] font-black text-black z-20">
+                          #{selectedEvidence.indexOf(ev.id) + 1}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={cn('text-sm font-serif truncate', isSelected ? 'text-white' : 'text-gray-400')}>
+
+                    {/* Content */}
+                    <div className="p-3 w-full space-y-1">
+                      <p className={cn(
+                        'text-[13px] font-serif font-bold truncate leading-tight transition-colors',
+                        isSelected ? 'text-accent' : 'text-gray-200'
+                      )}>
                         {ev.title}
                       </p>
-                      <p className="text-[9px] text-gray-600 truncate">{ev.description}</p>
+                      <p className="text-[10px] text-gray-500 line-clamp-2 leading-relaxed h-7 italic">
+                        {ev.clueText || ev.description}
+                      </p>
                     </div>
-                    {isSelected && (
-                      <span className="text-[8px] font-bold text-accent uppercase tracking-wider flex-shrink-0">
-                        #{selectedEvidence.indexOf(ev.id) + 1}
-                      </span>
-                    )}
-                  </button>
+
+                    {/* Checkmark overlay for selection */}
+                    <AnimatePresence>
+                      {isSelected && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="absolute inset-0 border-2 border-accent/20 pointer-events-none rounded-xl"
+                        />
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
                 );
               })}
             </div>
@@ -1682,28 +2057,49 @@ function DeductionModal({
             >
               Vazgeç
             </button>
-            <button
-              onClick={handleConfirm}
-              disabled={selectedEvidence.length !== 3 || isSubmitting}
-              className={cn(
-                'flex-1 py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2',
-                selectedEvidence.length === 3 && !isSubmitting
-                  ? 'bg-primary hover:bg-red-800 text-white shadow-[0_10px_30px_rgba(139,0,0,0.3)]'
-                  : 'bg-gray-900 text-gray-600 cursor-not-allowed border border-white/5'
+            <div className="relative flex-1 group/btn">
+              <button
+                onClick={handleConfirm}
+                disabled={selectedEvidence.length !== 3 || isSubmitting || foundEvidence.length < 3}
+                className={cn(
+                  'w-full py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2',
+                  selectedEvidence.length === 3 && !isSubmitting
+                    ? 'bg-primary hover:bg-red-800 text-white shadow-[0_10px_30px_rgba(139,0,0,0.3)]'
+                    : 'bg-gray-900 text-gray-600 cursor-not-allowed border border-white/5'
+                )}
+              >
+                {isSubmitting ? (
+                  <><Loader2 size={14} className="animate-spin" /> Değerlendiriliyor...</>
+                ) : (
+                  <><Gavel size={14} /> İthamı Onayla</>
+                )}
+              </button>
+              {/* Tooltip — sadece disabled iken göster (Plan Madde 1) */}
+              {selectedEvidence.length !== 3 && !isSubmitting && (
+                <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/90 border border-white/10 text-[9px] text-gray-400 px-3 py-1.5 rounded-lg opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none">
+                  {foundEvidence.length < 3
+                    ? '⚠ Önce en az 3 kanıt toplamalısın'
+                    : `En az 3 kanıt seçilmeli (${selectedEvidence.length}/3)`}
+                </div>
               )}
-            >
-              {isSubmitting ? (
-                <><Loader2 size={14} className="animate-spin" /> Değerlendiriliyor...</>
-              ) : (
-                <><Gavel size={14} /> İthamı Onayla</>
-              )}
-            </button>
+            </div>
           </div>
-          {selectedEvidence.length < 3 && (
-            <p className="text-center text-[9px] text-gray-700 mt-3">
-              {3 - selectedEvidence.length} kanıt daha seçmeniz gerekiyor
-            </p>
-          )}
+          {/* Alt mesaj — dinamik (Plan Madde 1) */}
+          <motion.p
+            key={selectedEvidence.length}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              'text-center text-[9px] mt-3',
+              selectedEvidence.length === 3 ? 'text-accent/60' : 'text-gray-700'
+            )}
+          >
+            {selectedEvidence.length === 3
+              ? '✓ Tüm kanıtlar seçildi — itham etmeye hazırsın'
+              : foundEvidence.length < 3
+                ? `Sahneye dön ve ${3 - foundEvidence.length} kanıt daha topla`
+                : `${3 - selectedEvidence.length} kanıt daha seçmen gerekiyor`}
+          </motion.p>
         </div>
       </motion.div>
     </div>
@@ -1788,7 +2184,7 @@ function ConfrontationOverlay({
         exit={{ scale: 0.93, opacity: 0, y: -20 }}
         transition={{ type: 'spring', damping: 20, stiffness: 200, delay: 0.15 }}
         className={cn(
-          'relative z-10 w-full max-w-2xl rounded-3xl overflow-hidden border shadow-2xl',
+          'relative z-10 w-full max-w-2xl rounded-3xl overflow-hidden border shadow-2xl mx-auto max-h-[90vh] overflow-y-auto custom-scrollbar',
           isCorrect
             ? 'border-green-500/30 shadow-[0_0_100px_rgba(34,197,94,0.12)]'
             : 'border-red-900/50 shadow-[0_0_100px_rgba(139,0,0,0.2)]'
@@ -1796,7 +2192,7 @@ function ConfrontationOverlay({
       >
         {/* Suspect şeridi */}
         {result.suspect && (
-          <div className="relative h-52 bg-black overflow-hidden">
+          <div className="relative h-40 sm:h-52 bg-black overflow-hidden">
             {result.suspect.generatedImageUrl ? (
               <img
                 src={result.suspect.generatedImageUrl}
@@ -1835,7 +2231,7 @@ function ConfrontationOverlay({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6 }}
-                className="text-3xl font-serif text-white drop-shadow-xl"
+                className="text-2xl sm:text-3xl font-serif text-white drop-shadow-xl"
               >
                 {result.suspect.name}
               </motion.h2>
@@ -1852,7 +2248,7 @@ function ConfrontationOverlay({
         )}
 
         {/* İçerik */}
-        <div className="bg-[#080808] p-8 space-y-6">
+        <div className="bg-[#080808] p-5 sm:p-8 space-y-5 sm:space-y-6">
           {/* Başlık */}
           <motion.div
             initial={{ opacity: 0, x: -15 }}
@@ -1868,7 +2264,7 @@ function ConfrontationOverlay({
             )}>
               <Gavel size={18} strokeWidth={1.5} />
             </div>
-            <h3 className="text-xl font-serif text-white">{result.title}</h3>
+            <h3 className="text-lg sm:text-xl font-serif text-white">{result.title}</h3>
           </motion.div>
 
           {/* Yüzleşme hikayesi */}
@@ -1886,7 +2282,7 @@ function ConfrontationOverlay({
             <p className="text-[10px] uppercase tracking-[0.3em] font-bold mb-3 flex items-center gap-2 text-gray-500">
               <Quote size={10} /> Yüzleşme
             </p>
-            <p className="text-gray-200 font-serif italic leading-relaxed text-[15px]">
+            <p className="text-gray-200 font-serif italic leading-relaxed text-[13px] sm:text-[15px]">
               "{result.confrontation}"
             </p>
           </motion.div>
@@ -1966,22 +2362,22 @@ function CaseSummaryModal({ resolution, onClose }: {
         initial={{ y: 40, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         transition={{ type: 'spring', damping: 25 }}
-        className="max-w-4xl w-full bg-[#0a0d0a] border border-green-900/50 rounded-2xl overflow-hidden shadow-[0_0_120px_rgba(34,197,94,0.1)] flex flex-col md:flex-row"
+        className="max-w-4xl w-full bg-[#0a0d0a] border border-green-900/50 rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_0_120px_rgba(34,197,94,0.1)] flex flex-col md:flex-row max-h-[95vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar mx-2 sm:mx-4"
       >
         {/* Killer reveal */}
-        <div className="w-full md:w-5/12 bg-black border-r border-green-900/30 relative min-h-[300px]">
+        <div className="w-full md:w-5/12 bg-black border-r border-green-900/30 relative min-h-[240px] sm:min-h-[300px]">
           <CaseImage src={resolution.killer.generatedImageUrl} alt={resolution.killer.name}
             fallbackSeed={resolution.killer.name} className="w-full h-full absolute inset-0" contain={true} />
           <div className="absolute inset-0 bg-gradient-to-t from-[#050805] via-[#050805]/50 to-transparent" />
           <div className="absolute bottom-8 left-0 right-0 text-center px-6">
             <span className="text-[10px] uppercase tracking-[0.4em] text-green-500 font-bold mb-3 block">Katil Yakalandı</span>
-            <h3 className="text-4xl font-serif text-white mb-1 drop-shadow-xl">{resolution.killer.name}</h3>
-            <p className="text-xs text-green-400/80 font-mono">{resolution.killer.role}</p>
+            <h3 className="text-3xl sm:text-4xl font-serif text-white mb-1 drop-shadow-xl">{resolution.killer.name}</h3>
+            <p className="text-[10px] sm:text-xs text-green-400/80 font-mono">{resolution.killer.role}</p>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="flex-1 p-8 md:p-10 flex flex-col justify-center">
+        <div className="flex-1 p-6 sm:p-8 md:p-10 flex flex-col justify-center">
           <div className="space-y-6">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full bg-green-950/50 flex items-center justify-center text-green-400 border border-green-500/30">
@@ -2000,15 +2396,15 @@ function CaseSummaryModal({ resolution, onClose }: {
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-3">
               {[
                 { label: 'Toplam Puan', val: resolution.score.toLocaleString(), icon: <Trophy size={15} className="text-accent" /> },
                 { label: 'Kanıtlar', val: String(resolution.stats.foundEvidence), icon: <Search size={15} className="text-gray-500" /> },
                 { label: 'Bulmacalar', val: String(resolution.stats.solvedPuzzles), icon: <PuzzleIcon size={15} className="text-gray-500" /> },
               ].map(item => (
-                <div key={item.label} className="bg-black/30 p-4 rounded-xl border border-white/5 text-center">
+                <div key={item.label} className="bg-black/30 p-3 sm:p-4 rounded-xl border border-white/5 text-center">
                   <p className="text-[8px] text-gray-500 uppercase font-bold tracking-widest mb-2">{item.label}</p>
-                  <div className="flex items-center justify-center gap-1.5 font-mono font-bold text-xl text-white">{item.icon} {item.val}</div>
+                  <div className="flex items-center justify-center gap-1.5 font-mono font-bold text-lg sm:text-xl text-white">{item.icon} {item.val}</div>
                 </div>
               ))}
             </div>

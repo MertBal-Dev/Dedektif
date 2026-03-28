@@ -16,7 +16,7 @@ const THEMES = [
 ];
 
 export default function Home() {
-  const { currentCase, isLoading, startNewCase, generationProgress, loadingMessage, hasSavedGame, loadSavedGame } = useGame();
+  const { currentCase, isLoading, startNewCase, generationProgress, loadingMessage, hasSavedGame, loadSavedGame, startDemoCase } = useGame();
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [showThemes, setShowThemes] = useState(false);
 
@@ -126,6 +126,16 @@ export default function Home() {
           >
             Tema Seç
             <ChevronRight size={14} className={`transition-transform ${showThemes ? 'rotate-90' : ''}`} />
+          </button>
+
+        </div>
+
+        <div className="flex justify-center mt-4">
+          <button
+            onClick={() => startDemoCase?.()}
+            className="text-[9px] text-gray-700 hover:text-accent uppercase tracking-[0.3em] transition-all bg-white/2 px-4 py-1.5 rounded-full border border-white/5 hover:border-accent/20"
+          >
+            Hızlı Test: Demo Vaka Başlat
           </button>
         </div>
 

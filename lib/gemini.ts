@@ -20,6 +20,93 @@ Kullanıcıya Next.js tabanlı bir dedektiflik oyunu için JSON formatında vaka
 - Eğer bir alan boşsa veya opsiyonel ise, alanı tamamen atla veya 'null' değeri kullan. 
 - JSON formatı kesinlikle standartlara uygun olmalı (geçersiz virgül, eksik tırnak vb. olmamalı).
 
+═══════════════════════════════════════════════════════
+ SENARYO ÇEŞİTLİLİĞİ — 20+ TİP (ZORUNLU ÇEŞİTLİLİK)
+═══════════════════════════════════════════════════════
+Her vaka üretiminde aşağıdaki senaryo tiplerinden BİRİNİ seç ve özgün şekilde işle.
+Aynı tipi arka arkaya tekrarlama. Seçilen tipi 'theme' alanına yansıt.
+
+1.  **Banka & Finans Soyguncu** — Banka dolandırıcılığı, sahte yatırım şemaları, milyonlarca liranın kaybolması; kurban içeriden birini fark etmiştir.
+2.  **Siyasi Komplo & Kumpas** — Seçim hilesi, rüşvetli belediye yetkilisi, imha edilmeye çalışılan siyasi rakip; basın ve iktidar karanlık işlerde.
+3.  **Sanat Dünyası Katli** — Müzayede sahtekârlığı, çalıntı eser, kıskançlık; bir sanatçının, galericinin ya da koleksiyonerin ölümü.
+4.  **Konak / Miras Dramı** — Büyük bir servetin mirasçıları arasında şiddet; vasiyet değiştirilmiş, avukat rüşvetçi, aile içinde kanlı hesaplaşma.
+5.  **Akademi & Üniversite Cinayeti** — Tez hırsızlığı, kariyer rekabeti; profesör, asistan veya öğrencinin ölümü kampüste.
+6.  **Gazetecilik & İfşa Vakası** — Bir muhabir karanlık bir şeyin üstüne gitmiştir; kaynağı, editörü veya kendisi ölü bulunur.
+7.  **Tarikat & Gizli Örgüt** — Karizmatik bir lider, körü körüne bağlılık, ritüeller; ayrılmak isteyen biri susmak zorunda kalır.
+8.  **Teknoloji & Siber Suç** — Startup iç savaşı, yazılım patenti cinayeti, veri sızdırma; kurban karanlık bir algoritmayı keşfetmiştir.
+9.  **Osmanlı Saray Entrikası** — Harem, Divan-ı Hümayun, paşalar arası güç savaşı; zehir, hançer ve şifreli fermân.
+10. **Liman & Kaçakçılık Ağı** — İstanbul, İzmir veya Trabzon limanında; uyuşturucu, silah ya da antika kaçakçılığı; katil kargo listesinde.
+11. **Tıp & Hastane Skandalı** — Doktor hatası örtbası, organ karaborsası, yanlış ilaç; kurban sağlık sisteminin içinde.
+12. **Spor Dünyası Şikesi** — Futbol, güreş ya da atıcılık; maç şikesi, doping, ölüm tehditlerinin ardından gerçek ölüm.
+13. **Çökmekte Olan Aile İşletmesi** — Fabrika, otel ya da restoran; ortaklar arasında ihanet, işçi ölümlerinin üstünün örtülmesi.
+14. **Noir Dedektif Klasiği** — 1940-1960 İstanbul; karanlık sokaklar, sigara dumanı, çözülemeyen bir geçmişten gelen kadın.
+15. **Diplomatik İmmünite Vakası** — Büyükelçilik, yabancı ajan, uluslararası sır; kurban iki ülke arasında sıkışmış.
+16. **Uçak / Gemi / Tren Cinayeti** — Kapalı alan, sınırlı şüpheli sayısı; seyahat sırasında gerçekleşen mükemmel suç.
+17. **Dini Cemaat & Vakıf Yolsuzluğu** — Hayır kurumu maskesi, bağışların çalınması; kurban gerçeği açıklamak üzereydi.
+18. **Mimari & İnşaat Mafyası** — İhale yolsuzluğu, çürük malzeme, çöken yapılar; müteahhit ve siyasetçi el ele.
+19. **Adliye & Hukuk İçi Çürüme** — Avukat, savcı ya da hâkim arasında; yanlış mahkûmiyet, kirli delil, adalet satılık.
+20. **Gastronomi & Restoran Dünyası** — Ünlü şef, Michelin yıldızı çalıntısı, gizli tarif savaşı; mutfakta cinayet.
+21. **Müzik Endüstrisi & Telif Savaşı** — Besteci, yönetici, idol; telif hakları için öldürme, sahte anlaşmalar.
+22. **Çocukluk Sırrı & Geç İntikam** — Onlarca yıl önce yaşanan bir trajedi; kurban sırrı biliyordu, katil geçmişinden kaçıyor.
+23. **Çevre Suçu & Şirket Örtbası** — Fabrika atıkları, zehirlenen köy, ölümlerin saklanan gerçeği; whistleblower susturulur.
+24. **Osmanlı Dönemi Ticaret Yolu** — İpek yolu kervanı, Ermeni tüccar, Rum esnaf; 1800'lerin İstanbul'unda çok kültürlü gerilim.
+
+═══════════════════════════════════════════════════════
+ KARAKTER ARKETİPLERİ — 30+ TİP (ROTASYON ZORUNLU)
+═══════════════════════════════════════════════════════
+Her vakada şüpheli havuzunu oluştururken aşağıdaki arketip listesinden SEÇ.
+"İş ortağı, eş, kardeş" üçlüsünü TEKRARLAMA. Her vakada farklı kombinasyon kullan.
+
+**MODERN (Günümüz Türkiye'si):**
+M01. Genç startup kurucusu — Hayallerini satmış, vicdanı ezilmiş
+M02. Sosyal medya fenomeni — Sahte yaşam, gerçek kıskançlık
+M03. Emekli polis dedektifi — Geçmiş davaların lekesi var
+M04. Özel güvenlik şirketi sahibi — Kiralık sır tutucu
+M05. Vergi müfettişi — Rakamlar arkasında ne var biliyor
+M06. Plastik cerrah — Kimlik değiştirme işinin ustası
+M07. Kripto yatırımcısı — Büyük kazanç, büyük borç
+M08. Biyoteknoloji araştırmacısı — Tehlikeli formülün sahibi
+M09. Eski siyasetçi danışmanı — Sırrı satmaya hazır
+M10. Lüks otel müdürü — Her odada bir skandal bilir
+
+**DÖNEM (1920-1980 Türkiye'si):**
+D01. Apartman kapıcısı — Hiçbir şeyi kaçırmaz
+D02. Meyhane sahibi — Söylentilerin merkezi
+D03. Dul bir paşa hanımı — Geçmişi bir hazinedir
+D04. Komünist sempatizan gazeteci — 1960'larda tehlikeli meslek
+D05. İthalatçı tüccar — Karaborsanın çarkını bilen
+D06. Rus Beyaz Muhacir — İstanbul'a sığınmış, sırrı var
+D07. Levanten aile mensubu — Beyoğlu'nun karma dünyasından
+D08. Rum azınlık eczacısı — Şehrin hafızası kendisinde
+D09. 27 Mayıs darbesi sonrası yargılanan general — Kan davası taşıyor
+D10. Radyo spikeri — Sesi herkesin tanıdığı, yüzü kimsenin bilmediği
+
+**OSMANLÜ DÖNEMİ (1450-1920):**
+O01. Kethüda (saray bürokrasi yöneticisi) — Fermânları o hazırlar
+O02. Kapıkulu yeniçerisi — Kanun değil, güç tanır
+O03. Yahudi sarraf — Paranın gücünü bilen
+O04. Rum kuyumcu — İki kültür arasında sıkışmış
+O05. Harem ağası — Sarayın kulakları
+O06. Tımarlı sipahi — Kaybettiği arazi yüzünden kin besliyor
+O07. Kadı (yargıç) — Adaleti şekillendiren ama rüşvete açık
+O08. Frenk (Avrupalı) seyyah — Gizli ajan olduğundan şüpheleniliyor
+O09. Lonca ustası — Esnaf liderliği güç savaşına döndü
+O10. Tekke şeyhi — Mistik güç, dünyevi çıkar
+
+**EVRENSEL / ZAMANÜSTÜüü:**
+E01. Mirasyedi torunu — Serveti bitmiş, gururu kalmış
+E02. Yabancı ülkede yetişmiş Türk — İki kültür arasında, ait değil hiçbirine
+E03. Eski sevgililer arasında sıkışmış üçüncü taraf — Sırdaş değil, suç ortağı
+E04. Çocukluk travmasından kurtulamayan yetişkin — Geçmişe bağlı, o yüzden tehlikeli
+E05. Toplumda itibarlı ama evde farklı biri — Çifte hayat ustası
+E06. Komplo teorileri üzerine kurulan inancın mahkûmu — Paranoyak mı, haklı mı?
+E07. Kendi ölümünü sahneleyerek kaçmaya çalışan — En beklenmedik şüpheli tipi
+E08. Hafızasını yitirmiş tanık — Ne hatırladığı, ne unuttuğu eşit derecede tehlikeli
+E09. Çok zeki ama yalnız çocuk/genç — Yetişkinlerin görmediğini görür
+E10. Sahte kimlikle yaşayan — Asıl geçmiş açılırsa her şey değişir
+
+═══════════════════════════════════════════════════════
+
 Her vaka MUTLAKA şunları içermelidir:
 
 **HIKAYE KALİTESİ:**
@@ -30,13 +117,14 @@ Her vaka MUTLAKA şunları içermelidir:
 
 **KARAKTERLER (4 şüpheli):**
 - Her birinin farklı kişiliği, güçlü motifi, detaylı geçmişi olmalı
+- Arketip listesinden BENZERSİZ kombinasyon seç — aynı vakada benzer roller olmasın
 - **ŞAŞIRTMA (RED HERRING):** Katili bulmak çok kolay olmamalı. En az 2-3 şüpheli, olay yerindeki kanıtlar veya motifleri nedeniyle sona kadar "şüpheli" kalmalı.
 - backstory: Karakterin geçmişi ve mağturla olan karmaşık ilişkisi
 - alibi: Savunması, doğrulanabilir mi değil mi
 - motive: Cinayeti işlemek için nedeni (para, kıskançlık, intikam, korku)
 - Sadece biri gerçekten katil ama tüm kanıtlar ve sorgular birleşmeden kesin sonuç çıkmamalı.
 
-**KANITLAR (8 adet - YARATICI VE BELGELENEBİLİR KANIT KURALI):**
+**KANITLAR (8 adet — YARATICI VE BELGELENEBİLİR KANIT KURALI):**
 - Kanıtlar; fiziksel nesneler (anahtar, mendil) olabileceği gibi, somut bir veriyi temsil eden belgeler (banka dökümü, günlük sayfası, eczane fişi, dijital kayıtlar) de olabilir.
 - **YARATICILIK:** Sadece "yerde bulunan bıçak" gibi klasiklerden kaçın. Örn: "Kurbanın banka dökümünde görünen şüpheli bir eczane harcaması", "Katilin olay yerinde unuttuğu, sadece belirli bir terziye ait olan nadir bir düğme", "Kurbanın telefonundaki yarım kalmış bir mesaj".
 - **ERA-SPECIFIC:** Senaryo dönemiyle %100 uyumlu olmalı. (Osmanlı'da banka dökümü olmaz ama mühürlü bir vergi defteri olabilir).
@@ -57,7 +145,7 @@ Her vaka MUTLAKA şunları içermelidir:
   * isRevealed: false (başlangıç değeri)
   * linkedEvidenceId: sadece bir nesnede olmalı, bu kanıtın id'si
 
-**BULMACALAR (4 adet - çeşitli tipler):**
+**BULMACALAR (4 adet — çeşitli tipler):**
 - type seçenekleri: riddle (bilmece), code (şifre çözme), cipher (alfabe şifresi), logic (mantık sorusu), sequence (dizi tamamlama)
 - Her bulmaca çözüldüğünde bir kanıt açılıyor (unlocksEvidenceId)
 - difficulty: 'easy', 'medium', 'hard' — en az 1 easy, 1 hard olmalı
@@ -178,7 +266,8 @@ JSON Şeması:
       "title": "string",
       "question": "string",
       "answer": "string",
-      "hint": "string",
+      "hint": "string (Çözmek için yardımcı ipucu)",
+      "rewardDescription": "string (Çözüldüğünde açılan kanıtın vaka ile bağlantısını ve önemini açıklayan, oyuncuyu yönlendiren 2-3 cümlelik metin)",
       "isSolved": false,
       "difficulty": "easy|medium|hard",
       "points": number,
@@ -188,6 +277,25 @@ JSON Şeması:
   ]
 }
 `;
+
+// ─── Spatial Prompt Helper ────────────────────────────────────────────────────
+// İnteraktif nesne koordinatlarını (x, y yüzdesi) İngilizce konum tanımına dönüştürür.
+// Bu bilgi sceneImagePrompt'a eklenerek Imagen'ın nesneleri doğru konuma yerleştirme
+// başarısını artırır.
+function coordinateToSpatialLabel(x: number, y: number): string {
+  const hLabel = x < 25 ? 'far left' : x < 42 ? 'left-center' : x < 58 ? 'center' : x < 75 ? 'right-center' : 'far right';
+  const vLabel = y < 20 ? 'top' : y < 40 ? 'upper' : y < 60 ? 'middle' : y < 78 ? 'lower' : 'bottom';
+  return `${vLabel} ${hLabel}`;
+}
+
+function injectSpatialContext(scenePrompt: string, objects: { label: string; x: number; y: number; icon: string }[]): string {
+  if (!objects || objects.length === 0) return scenePrompt;
+  const placements = objects
+    .map(o => `"${o.label}" (${o.icon}) at the ${coordinateToSpatialLabel(o.x, o.y)} of the frame`)
+    .join(', ');
+  // Prompt'un sonuna konum bağlamını ekle — yeni cümle
+  return `${scenePrompt.trimEnd()}, scene must prominently include: ${placements}.`;
+}
 
 export async function generateNewCase(theme: string = "Noir Gerilim"): Promise<Case> {
   const prompt = `Yeni bir dedektiflik vakası oluştur. 
@@ -228,13 +336,25 @@ Talimatlar:
 
     // ── YENİ: Her evidence için interactiveObjects normalize et ───────────
     if (parsed.evidence) {
-      parsed.evidence = parsed.evidence.map(ev => ({
-        ...ev,
-        interactiveObjects: (ev.interactiveObjects || []).map(obj => ({
+      parsed.evidence = parsed.evidence.map(ev => {
+        const normalizedObjects = (ev.interactiveObjects || []).map(obj => ({
           ...obj,
           isRevealed: false, // Her zaman false başlat — güvenlik
-        })),
-      }));
+        }));
+
+        // ── SPATIAL PROMPTING: Koordinatları İngilizce konuma çevir ──────
+        // sceneImagePrompt'a nesne konum bilgisini ekleyerek Imagen'ın
+        // nesneleri doğru yere yerleştirme başarısını artırıyoruz.
+        const enrichedScenePrompt = ev.sceneImagePrompt
+          ? injectSpatialContext(ev.sceneImagePrompt, normalizedObjects)
+          : ev.sceneImagePrompt;
+
+        return {
+          ...ev,
+          sceneImagePrompt: enrichedScenePrompt,
+          interactiveObjects: normalizedObjects,
+        };
+      });
     }
 
     // ── YENİ: Her puzzle için interactiveObjects normalize et ─────────────
@@ -257,7 +377,8 @@ export async function generateInterrogationResponse(
   fullStory: string,
   character: Character,
   question: string,
-  history: { role: 'user' | 'model'; message: string }[]
+  history: { role: 'user' | 'model'; message: string }[],
+  evidenceContext?: string
 ): Promise<string> {
   const systemPrompt = `
 Sen şu karakteri canlandırıyorsun ve bir sorgu odasındasın:
@@ -274,6 +395,10 @@ KATİL Mİ: ${character.isKiller ? 'EVET - Ama bunu ASLA açıkça söyleme. Yal
 VAKA: ${caseTitle}
 OLAY ÖRGÜSÜ: ${fullStory}
 
+${evidenceContext ? `VAKADAKİ GİZLİ KANITLAR VE ID'LERİ:
+${evidenceContext}
+` : ''}
+
 DAVRANIŞLAR:
 - Karakterine özel konuşma tarzı ve ağız yapısı kullan
 - Eğer katilsen: tedirgin ol, bazı soruları atlat, başkalarına yönlendir, zaman zaman çelişkiye düş
@@ -281,7 +406,7 @@ DAVRANIŞLAR:
 - Kısa, doğal, gerçekçi cevaplar ver (2-5 cümle)
 - **BİLGİ PAYLAŞIMI:** Eğer oyuncu mantıklı ve sıkıştırıcı sorular sorarsa, diğer şüpheliler hakkında dedikodular, olay yerinde gördüğün detaylar veya bazı bulmacaların çözümüne ışık tutacak "dolaylı ipuçları" verebilirsin.
 - Türkçe konuş, karakterin eğitim seviyesine/meslekine uygun dil kullan
-- **GİZLİ KANITLAR:** Eğer seninle ilgili veya bildiğin bir "gizli kanıt" varsa (vaka dosyasında isHidden: true olanlar) ve oyuncu seni gerçekten köşeye sıkıştırırsa veya doğru anahtar kelimeyi söylerse, cevabının sonuna mutlaka [REVEAL:kanit_id] etiketini ekle. Bu etiketi sadece kanıtı gerçekten ağzından kaçırdığında kullan.
+- **GİZLİ KANITLAR:** Eğer seninle ilgili veya bildiğin bir "gizli kanıt" varsa (isHidden: true olanlar) ve oyuncu seni gerçekten köşeye sıkıştırırsa veya doğru anahtar kelimeyi söylerse, cevabının sonuna mutlaka [REVEAL:kanit_id] etiketini ekle. Bu etiketi sadece kanıtı gerçekten ağzından kaçırdığında kullan. ID'yi yukarıdaki listeden tam olarak kopyala.
 - Hiçbir zaman "Ben AI'yım" veya oyun mekaniklerine dair hiçbir şey söyleme
 `;
 
@@ -344,6 +469,8 @@ DEĞERLENDİRME KRİTERLERİ:
    - 1-4 arası denemelerde: Sadece küçük bir yönlendirme yap (Sıcak/Soğuk).
    - 5 ve üzeri denemelerde: Daha detaylı, neredeyse cevabı bulduracak kadar net bir ipucu vermeye başla.
 5. Cevabı doğrudan SÖYLEME. Sadece rehberlik et.
+6. Eğer oyuncu doğru bildiyse, "feedback" alanında onu tebrik et ve başarısını onayla.
+7. Eğer bulmaca bir kanıt açıyorsa (puzzle.unlocksEvidenceId), bu kanıtın önemine dair küçük bir ipucu da feedback'e eklenebilir.
 
 ÇIKTI FORMATI: Sadece JSON döndür.
 {

@@ -57,7 +57,8 @@ export interface Puzzle {
   title: string;
   question: string;
   answer: string;
-  hint: string;
+  hint: string;                   // ── İpucu: Çözmek için yardımcı metin
+  rewardDescription: string;      // ── Başarı: Çözüldüğünde gösterilecek vaka bilgisi
   isSolved: boolean;
   imagePrompt?: string;
   generatedImageUrl?: string;

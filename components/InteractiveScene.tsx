@@ -6,6 +6,53 @@ import { Evidence, InteractiveObject } from '@/types/game';
 import { useGame } from '@/features/useGame';
 import { Loader2, Eye, Sparkles, X, ScanSearch } from 'lucide-react';
 
+// ─── useSound (GameView ile aynı motor — sıfır dosya bağımlılığı) ─────────────
+type SoundKey = 'click' | 'discover' | 'success';
+function useSound() {
+  const ctxRef = React.useRef<AudioContext | null>(null);
+  const getCtx = React.useCallback((): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      if (!ctxRef.current || ctxRef.current.state === 'closed') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return null;
+        ctxRef.current = new AudioCtx();
+      }
+      if (ctxRef.current.state === 'suspended') ctxRef.current.resume();
+      return ctxRef.current;
+    } catch { return null; }
+  }, []);
+
+  const play = React.useCallback((key: SoundKey) => {
+    try {
+      const ctx = getCtx();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const note = (freq: number, type: OscillatorType, offset: number, dur: number, vol: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now + offset);
+        gain.gain.setValueAtTime(0, now + offset);
+        gain.gain.linearRampToValueAtTime(vol, now + offset + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + dur + 0.02);
+      };
+      if (key === 'discover') {
+        note(330, 'triangle', 0, 0.35, 0.10);
+        note(494, 'triangle', 0.08, 0.30, 0.08);
+        note(659, 'sine', 0.18, 0.40, 0.07);
+        note(880, 'sine', 0.28, 0.35, 0.05);
+      }
+    } catch { /* sessizce geç */ }
+  }, [getCtx]);
+
+  return { play };
+}
+
 // ─── Tipler ───────────────────────────────────────────────────────────────────
 interface InteractiveSceneProps {
   evidence: Evidence;
@@ -47,7 +94,7 @@ function EvidenceZoomOverlay({ evidence, onClose }: { evidence: Evidence; onClos
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-            
+
             {/* Label Badge */}
             <div className="absolute bottom-6 left-6">
               <span className="px-3 py-1 bg-amber-500 text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-sm shadow-xl">
@@ -64,7 +111,7 @@ function EvidenceZoomOverlay({ evidence, onClose }: { evidence: Evidence; onClos
                 <ScanSearch size={14} />
                 Analiz Sonucu
               </div>
-              
+
               <div className="space-y-4">
                 <p className="text-xl md:text-2xl font-serif text-gray-200 italic leading-relaxed quote-text">
                   "{evidence.clueText}"
@@ -170,10 +217,13 @@ function HotspotPoint({
   onReveal: (obj: InteractiveObject) => void;
 }) {
   const [showPopup, setShowPopup] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const handleClick = useCallback(() => {
     if (!isRevealed) {
       onReveal(object);
+      // blocked durumunu parent'tan alınamadığı için popup'u her durumda aç;
+      // parent blockMessage state'i ile ayrı overlay gösteriyor
     }
     setShowPopup(prev => !prev);
   }, [isRevealed, object, onReveal]);
@@ -218,11 +268,10 @@ function HotspotPoint({
         <motion.div
           whileHover={{ scale: 1.3 }}
           whileTap={{ scale: 0.9 }}
-          className={`relative w-4 h-4 rounded-full border-2 flex items-center justify-center shadow-lg transition-colors ${
-            isRevealed
-              ? 'bg-amber-600 border-amber-400 shadow-amber-900/50'
-              : 'bg-amber-400 border-white shadow-amber-400/40 group-hover:bg-white'
-          }`}
+          className={`relative w-4 h-4 rounded-full border-2 flex items-center justify-center shadow-lg transition-colors ${isRevealed
+            ? 'bg-amber-600 border-amber-400 shadow-amber-900/50'
+            : 'bg-amber-400 border-white shadow-amber-400/40 group-hover:bg-white'
+            }`}
         >
           {isRevealed && (
             <Eye size={8} className="text-amber-200" />
@@ -271,14 +320,24 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
   ).length;
   const totalCount = interactiveObjects.length;
 
+  const [blockMessage, setBlockMessage] = useState<string | null>(null);
+  const { play } = useSound(); // Keşif sesi
+
   const handleReveal = useCallback((obj: InteractiveObject) => {
-    revealInteractiveObject(sceneEvidence.id, obj.id);
-    
-    // Eğer nesne bir kanıta bağlıysa ve o kanıt vaka dosyasında varsa zoom yap
+    const result = revealInteractiveObject(sceneEvidence.id, obj.id);
+
+    // Kanal engeli — mesajı göster ve işlemi durdur
+    if (typeof result === 'string') {
+      setBlockMessage(result);
+      setTimeout(() => setBlockMessage(null), 5000);
+      return;
+    }
+
+    // Başarı — keşif sesi + eğer nesne bir kanıta bağlıysa zoom yap
+    play('discover');
     if (obj.linkedEvidenceId && currentCase) {
       const linkedEv = currentCase.evidence.find(e => e.id === obj.linkedEvidenceId);
       if (linkedEv) {
-        // Kısa bir gecikme ile zoom yap (popuptan sonra)
         setTimeout(() => setZoomedEvidence(linkedEv), 800);
       }
     }
@@ -293,11 +352,10 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
           {/* Tarama modu toggle */}
           <button
             onClick={() => setScanMode(prev => !prev)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
-              scanMode
-                ? 'bg-amber-400/20 border-amber-400/50 text-amber-400'
-                : 'bg-white/5 border-white/15 text-gray-500 hover:text-gray-300'
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${scanMode
+              ? 'bg-amber-400/20 border-amber-400/50 text-amber-400'
+              : 'bg-white/5 border-white/15 text-gray-500 hover:text-gray-300'
+              }`}
           >
             <ScanSearch size={11} />
             {scanMode ? 'Tarama Aktif' : 'Tara'}
@@ -310,11 +368,10 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
                 {interactiveObjects.map((obj) => (
                   <div
                     key={obj.id}
-                    className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                      isObjectRevealed(sceneEvidence.id, obj.id)
-                        ? 'bg-amber-400'
-                        : 'bg-gray-700'
-                    }`}
+                    className={`w-1.5 h-1.5 rounded-full transition-colors ${isObjectRevealed(sceneEvidence.id, obj.id)
+                      ? 'bg-amber-400'
+                      : 'bg-gray-700'
+                      }`}
                   />
                 ))}
               </div>
@@ -352,9 +409,8 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
         <img
           src={displayImage}
           alt={sceneEvidence.location}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
           onLoad={() => setImageLoaded(true)}
           onError={() => { setImageError(true); setImageLoaded(true); }}
           draggable={false}
@@ -392,12 +448,29 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
           ))}
         </AnimatePresence>
 
+        {/* ── Kanal Engeli Mesajı ─────────────────────────────────────────── */}
+        <AnimatePresence>
+          {blockMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full px-4"
+            >
+              <div className="bg-[#1a0d00]/95 border border-amber-800/50 rounded-xl px-5 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] backdrop-blur-md flex items-start gap-3">
+                <span className="text-xl flex-shrink-0 mt-0.5">🔒</span>
+                <p className="text-[12px] text-amber-200/90 font-serif italic leading-relaxed">{blockMessage}</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Zoom Overlay */}
         <AnimatePresence>
           {zoomedEvidence && (
-            <EvidenceZoomOverlay 
-              evidence={zoomedEvidence} 
-              onClose={() => setZoomedEvidence(null)} 
+            <EvidenceZoomOverlay
+              evidence={zoomedEvidence}
+              onClose={() => setZoomedEvidence(null)}
             />
           )}
         </AnimatePresence>

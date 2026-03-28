@@ -1,27 +1,49 @@
 import { Case } from "@/types/game";
 
 /**
- * Generates an image using Gemini's Imagen models.
- * Supports multiple model IDs (imagen-4.0-generate-001, imagen-3.0-generate-001, etc.)
+ * Generates an image using Gemini's Imagen or Multimodal (Banana) models.
+ * Supports both :predict (Imagen) and :generateContent (Gemini-Multimodal) endpoints.
  * Returns a base64 Data URL.
  */
-async function generateGeminiImage(prompt: string, modelId: string = "imagen-4.0-fast-generate-001"): Promise<string | null> {
+async function generateGeminiImage(prompt: string, modelId: string): Promise<string | null> {
   const apiKey = process.env.GEMINI_KEY;
   if (!apiKey) {
     console.warn("⚠️ GEMINI_KEY bulunamadı, Imagen kullanılamıyor.");
     return null;
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:predict?key=${apiKey}`;
+  // Model tipini ve metodunu belirle
+  const isMultimodal = modelId.includes("gemini") || modelId.includes("banana");
+  const method = isMultimodal ? "generateContent" : "predict";
+  const url = `https://generativelanguage.googleapis.com/v1beta/${modelId}:${method}?key=${apiKey}`;
 
-  const body = {
-    instances: [{ prompt: `${prompt}, hyper-realistic photography, 8k resolution, cinematic lighting, natural skin textures, 35mm lens, film noir atmosphere, detailed facial features` }],
-    parameters: {
-      sampleCount: 1,
-      aspectRatio: "16:9", // ── Sahne görselleri için daha uygun
-      outputMimeType: "image/webp"
-    }
-  };
+  let body: any;
+  if (method === "predict") {
+    // --- IMAGEN (PREDICT) FORMATI ---
+    body = {
+      instances: [{ 
+        prompt: `${prompt}, hyper-realistic photography, 8k resolution, cinematic lighting, natural skin textures, 35mm lens, film noir atmosphere, detailed facial features` 
+      }],
+      parameters: {
+        sampleCount: 1,
+        aspectRatio: "16:9",
+        outputMimeType: "image/webp"
+      }
+    };
+  } else {
+    // --- GEMINI MULTIMODAL (GENERATECONTENT) FORMATI ---
+    body = {
+      contents: [{
+        parts: [{ 
+          text: `Generate a high-quality, professional image: ${prompt}, hyper-realistic photography, cinematic lighting, film noir atmosphere.` 
+        }]
+      }],
+      generationConfig: {
+        // Multimodal image generation için özel parametreler (gerekirse burası modele göre değişebilir)
+        candidateCount: 1,
+      }
+    };
+  }
 
   try {
     const response = await fetch(url, {
@@ -32,14 +54,27 @@ async function generateGeminiImage(prompt: string, modelId: string = "imagen-4.0
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.warn(`⚠️ Gemini Imagen (${modelId}) failed (${response.status})`);
+      console.warn(`⚠️ Gemini ${modelId} failed (${response.status}):`, JSON.stringify(errorData));
       return null;
     }
 
     const data = await response.json();
-    if (data.predictions && data.predictions[0]?.bytesBase64Encoded) {
-      console.log(`🎨 Generated image via Gemini ${modelId}`);
-      return `data:image/webp;base64,${data.predictions[0].bytesBase64Encoded}`;
+    
+    // --- RESPONS PARSING ---
+    if (method === "predict") {
+      // Imagen formatı: predictions[0].bytesBase64Encoded
+      if (data.predictions?.[0]?.bytesBase64Encoded) {
+        console.log(`🎨 Generated image via Gemini Imagen (${modelId})`);
+        return `data:image/webp;base64,${data.predictions[0].bytesBase64Encoded}`;
+      }
+    } else {
+      // Gemini formatı: candidates[0].content.parts[0].inline_data.data (genelde blob döner)
+      // Veya bazı preview modellerde farklı olabilir, en yaygın olanı kontrol et:
+      const part = data.candidates?.[0]?.content?.parts?.[0];
+      if (part?.inlineData?.data) {
+        console.log(`🎨 Generated image via Gemini Multimodal (${modelId})`);
+        return `data:${part.inlineData.mimeType || 'image/webp'};base64,${part.inlineData.data}`;
+      }
     }
   } catch (error) {
     console.error(`❌ Gemini Image generation (${modelId}) failed:`, error);
@@ -75,17 +110,23 @@ async function generatePollinationsImage(prompt: string, useKey: boolean = true)
  * Optimized for 2026: Min Cost, Max Quality.
  */
 export async function generateImage(prompt: string): Promise<string | null> {
-  // ── Fiyat/Performans Odaklı Sıralama ───────────────────────────────────────
+  // ── Fiyat/Performans ve Kota Odaklı Sıralama (Best to Fallback) ────────────────
   const geminiModels = [
-    "imagen-3.0-fast-generate-001", // En ucuz (hızlı ve yeterli kalite)
-    "imagen-4.0-fast-generate-001", // Orta fiyat (yüksek kalite-hız dengesi)
-    "imagen-3.0-generate-001",      // Standart (garanti model)
-    "imagen-4.0-generate-001",      // Üst kalite (daha pahalı)
-    "imagen-4.0-ultra-generate-001" // En pahalı (en son çare)
+    "imagen-4.0-fast-generate-001",       // Imagen 4 Fast (Hızlı ve kaliteli)
+    "gemini-2.5-flash-image",             // Nano Banana (En yüksek kota/hız)
+    "gemini-3.1-flash-image-preview",     // Nano Banana 2 (Yeni nesil denge)
+    "imagen-4.0-generate-001",            // Imagen 4 (Yüksek kalite)
+    "gemini-3-pro-image-preview",         // Nano Banana Pro (Üstün kalite)
+    "imagen-4.0-ultra-generate-001",      // Imagen 4 Ultra (En üst kalite, düşük kota)
+    "nano-banana-pro-preview",            // Alternatif Pro (Son çare Gemini)
+    "imagen-3.0-fast-generate-001",       // Eski nesil hızlı
+    "imagen-3.0-generate-001"             // Eski nesil standart
   ];
 
   for (const modelId of geminiModels) {
-    const img = await generateGeminiImage(prompt, modelId);
+    // API URL için 'models/' prefix'ini ekle (eğer yoksa)
+    const fullModelId = modelId.startsWith("models/") ? modelId : `models/${modelId}`;
+    const img = await generateGeminiImage(prompt, fullModelId);
     if (img) return img;
     // Rate limit yememek için başarısız denemeler arası küçük bekleme
     await wait(300);

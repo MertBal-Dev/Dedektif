@@ -64,6 +64,7 @@ export async function evaluatePuzzleAction(
     question: puzzle.question,
     answer: puzzle.answer,
     hint: puzzle.hint,
+    rewardDescription: puzzle.rewardDescription,
     difficulty: puzzle.difficulty,
     points: puzzle.points,
     unlocksEvidenceId: puzzle.unlocksEvidenceId,

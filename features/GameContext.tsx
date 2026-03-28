@@ -9,6 +9,7 @@ import {
   evaluateAccusationAction
 } from '@/app/actions/game';
 import { interrogateSuspectAction } from '@/app/actions/interrogate';
+import { MOCK_CASE } from '@/lib/mockCase';
 
 const INITIAL_GAME_STATE: GameState = {
   currentCaseId: null,
@@ -48,7 +49,8 @@ interface GameContextType {
   useHint: (puzzleId: string) => string | null;
   exitCase: () => void;
   // ── YENİ ──────────────────────────────────────────────────────────────────
-  revealInteractiveObject: (evidenceId: string, objectId: string) => void;
+  // Returns null on success, or a string message if blocked (wrong channel)
+  revealInteractiveObject: (evidenceId: string, objectId: string) => string | null;
   isObjectRevealed: (evidenceId: string, objectId: string) => boolean;
   generationProgress: number;
   loadingMessage: string;
@@ -57,6 +59,7 @@ interface GameContextType {
   hasSavedGame: boolean;
   loadSavedGame: () => Promise<void>;
   clearStorage: () => Promise<void>;
+  startDemoCase: () => void;
 }
 
 // ─── IndexedDB Utils ───────────────────────────────────────────────────────────
@@ -268,6 +271,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setLoadingMessage('Soruşturma dosyası açılıyor...');
     setError(null);
 
+    // ── Aşamalı yükleme mesajları (Plan Madde 2) ────────────────────────────
+    const simulationPhases = [
+      { progress: 5, message: 'Suç mahalli inceleniyor...' },
+      { progress: 12, message: 'Olay yeri kordon altına alınıyor...' },
+      { progress: 20, message: 'Şüphelilerin geçmişi araştırılıyor...' },
+      { progress: 30, message: 'Parmak izleri taranıyor...' },
+      { progress: 40, message: 'Karanlık sırlar yerleştiriliyor...' },
+      { progress: 52, message: 'Adli tıp raporu hazırlanıyor...' },
+      { progress: 62, message: 'Bulmacalar kurgulanıyor...' },
+      { progress: 72, message: 'Tanık ifadeleri alınıyor...' },
+      { progress: 82, message: 'Kanıt dosyaları düzenleniyor...' },
+    ];
+
+    // AI cevabı gelene kadar barı %5'ten %90'a kadar simüle et
+    let phaseIndex = 0;
+    const simulationInterval = setInterval(() => {
+      if (phaseIndex < simulationPhases.length) {
+        const phase = simulationPhases[phaseIndex];
+        setGenerationProgress(phase.progress);
+        setLoadingMessage(phase.message);
+        phaseIndex++;
+      }
+    }, 1800); // Her 1.8 saniyede bir aşama geç
+
     const messages = [
       'Olay yeri kordon altına alınıyor...',
       'Parmak izleri taranıyor...',
@@ -280,8 +307,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     ];
 
     try {
-      // 1. ADIM: Metin Verisi (Hızlı)
+      // 1. ADIM: Metin Verisi (Hızlı) — AI cevabı geldiğinde simülasyonu durdur
       const baseCase = await generateBaseCaseAction(theme);
+      clearInterval(simulationInterval);
 
       setGenerationProgress(10);
       setLoadingMessage(messages[0]);
@@ -352,6 +380,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setGenerationProgress(100);
       setLoadingMessage('Vaka Dosyası Hazır!');
     } catch (err: any) {
+      clearInterval(simulationInterval);
       console.error(err);
       setError(err.message || 'Vaka başlatılamadı. Lütfen tekrar deneyin.');
     } finally {
@@ -359,37 +388,91 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [gameState.solvedCaseIds]);
 
+  const startDemoCase = useCallback(() => {
+    setIsLoading(true);
+    setLoadingMessage('Demo Dosyası Hazırlanıyor...');
+    setGenerationProgress(50);
+
+    setTimeout(() => {
+      setCurrentCase(MOCK_CASE);
+      setGameState({
+        ...INITIAL_GAME_STATE,
+        currentCaseId: MOCK_CASE.id,
+        timeStarted: new Date().toISOString(),
+        discoveredChapterIds: MOCK_CASE.chapters.filter(ch => ch.isUnlocked).map(ch => ch.id),
+      });
+      setIsLoading(false);
+      setGenerationProgress(100);
+      showNotification('success', 'Demo vaka başlatıldı. İyi testler!');
+    }, 1000);
+  }, [showNotification]);
+
   const findEvidence = useCallback((evidenceId: string) => {
     if (!currentCase) return;
-    if (gameState.foundEvidenceIds.includes(evidenceId)) return;
 
-    const evidence = currentCase.evidence.find(e => e.id === evidenceId);
-    if (!evidence) return;
+    // Güvenlik: Kanıt vaka dosyasında var mı?
+    const targetEvidence = currentCase.evidence.find(e => e.id === evidenceId);
+    if (!targetEvidence) return;
 
     const now = new Date().toISOString();
 
-    setCurrentCase(prev => prev ? {
-      ...prev,
-      evidence: prev.evidence.map(e =>
-        e.id === evidenceId ? { ...e, isFound: true, foundAt: now } : e
-      ),
-    } : prev);
+    // 1. Case verisini güncelle (isFound: true)
+    setCurrentCase(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        evidence: prev.evidence.map(e =>
+          e.id === evidenceId ? { ...e, isFound: true, foundAt: now } : e
+        ),
+      };
+    });
 
-    setGameState(prev => ({
-      ...prev,
-      foundEvidenceIds: [...prev.foundEvidenceIds, evidenceId],
-      score: prev.score + 150,
-    }));
-  }, [currentCase, gameState.foundEvidenceIds]);
+    // 2. Global state'i güncelle (functional update ile stale closure engellenir)
+    setGameState(prev => {
+      if (prev.foundEvidenceIds.includes(evidenceId)) return prev;
+      
+      // Başarı bildirimi göster (Plan Madde 3)
+      showNotification('success', targetEvidence.title + ' dosyaya eklendi! Kanıtlar sekmesini incele.');
+      
+      return {
+        ...prev,
+        foundEvidenceIds: [...prev.foundEvidenceIds, evidenceId],
+        score: prev.score + 150,
+      };
+    });
+  }, [currentCase]);
 
-  // ── YENİ: İnteraktif nesne keşfetme ─────────────────────────────────────────
-  const revealInteractiveObject = useCallback((evidenceId: string, objectId: string) => {
-    if (!currentCase) return;
+  // ── YENİ: İnteraktif nesne keşfetme — STRICT LOGIC GATE ─────────────────────
+  // Dönüş değeri: null = başarı, string = engel mesajı (UI'da gösterilecek)
+  const revealInteractiveObject = useCallback((evidenceId: string, objectId: string): string | null => {
+    if (!currentCase) return null;
 
     const compositeKey = `${evidenceId}:${objectId}`;
 
     // Zaten keşfedildiyse tekrar işlem yapma
-    if (gameState.revealedObjectIds.includes(compositeKey)) return;
+    if (gameState.revealedObjectIds.includes(compositeKey)) return null;
+
+    const evidence = currentCase.evidence.find(e => e.id === evidenceId);
+    if (!evidence) return null;
+
+    const obj = evidence.interactiveObjects?.find(o => o.id === objectId);
+    if (!obj) return null;
+
+    // ── STRICT LOGIC GATE ────────────────────────────────────────────────────
+    // KANAL 1: Sorgu kanalı — linkedEvidence isHidden:true ise sadece sorgu ile açılır
+    if (obj.linkedEvidenceId) {
+      const linkedEv = currentCase.evidence.find(e => e.id === obj.linkedEvidenceId);
+      if (linkedEv?.isHidden) {
+        return `🔒 Bu nesnede gizli bir ipucu var, ancak önce doğru şüpheliyi sorgulayarak bu bilgiyi açığa çıkarmalısın.`;
+      }
+
+      // KANAL 2: Bulmaca kanalı — linkedEvidence başka bir puzzle'ın ödülüyse
+      const linkedPuzzle = currentCase.puzzles.find(p => p.unlocksEvidenceId === obj.linkedEvidenceId);
+      if (linkedPuzzle && !linkedPuzzle.isSolved) {
+        return `🧩 Bu nesne bir bulmacayla kilitli. "${linkedPuzzle.title}" bulmacasını çözersen bu kanıta ulaşabilirsin.`;
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // currentCase içindeki evidence'ı bul ve nesneyi işaretle
     setCurrentCase(prev => {
@@ -400,8 +483,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (ev.id !== evidenceId) return ev;
           return {
             ...ev,
-            interactiveObjects: (ev.interactiveObjects || []).map(obj =>
-              obj.id === objectId ? { ...obj, isRevealed: true } : obj
+            interactiveObjects: (ev.interactiveObjects || []).map(o =>
+              o.id === objectId ? { ...o, isRevealed: true } : o
             ),
           };
         }),
@@ -415,14 +498,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       score: prev.score + 25, // Nesne keşfetme puanı
     }));
 
-    // LinkedEvidenceId varsa o kanıtı da bul
-    const evidence = currentCase.evidence.find(e => e.id === evidenceId);
-    if (evidence?.interactiveObjects) {
-      const obj = evidence.interactiveObjects.find(o => o.id === objectId);
-      if (obj?.linkedEvidenceId) {
-        findEvidence(obj.linkedEvidenceId);
-      }
+    // KANAL 1 (Saha): LinkedEvidenceId varsa ve engel yoksa kanıtı aç
+    if (obj.linkedEvidenceId) {
+      findEvidence(obj.linkedEvidenceId);
     }
+
+    return null; // Başarı — engel yok
   }, [currentCase, gameState.revealedObjectIds, findEvidence]);
 
   // ── YENİ: Nesnenin keşfedilip keşfedilmediğini kontrol et ────────────────────
@@ -519,7 +600,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         currentCase.fullStory,
         cleanCharacter,
         question,
-        history.slice(-10)
+        history.slice(-10),
+        currentCase.evidence // Kanıt listesini gönder
       );
 
       // ── YENİ: REVEAL Etiketi Kontrolü ──────────────────────────────────────
@@ -530,11 +612,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // Etiketi metinden temizle (opsiyonel, ama daha temiz görünür)
         response = rawResponse.replace(/\[REVEAL:.+?\]/g, '').trim();
 
-        // Eğer bu kanıt zaten bulunmadıysa bul
-        if (!gameState.foundEvidenceIds.includes(revealedId)) {
-          findEvidence(revealedId);
-          showNotification('success', 'Yeni bir ipucu bulundu! Kanıtlar sekmesini incele.');
-        }
+        // findEvidence fonksiyonu kendi içinde "zaten bulundu mu" kontrolünü 
+        // functional update ile yaptığı için burada tekrar kontrol etmeye gerek yok, 
+        // ama kullanıcıya bildirim göndermek için stale-safe bir şekilde kontrol edelim.
+        setGameState(prev => {
+          if (!prev.foundEvidenceIds.includes(revealedId)) {
+            findEvidence(revealedId);
+            showNotification('success', 'Yeni bir ipucu bulundu! Kanıtlar sekmesini incele.');
+          }
+          return prev;
+        });
       }
 
       setGameState(prev => ({
@@ -557,7 +644,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsInterrogating(false);
     }
-  }, [currentCase, gameState.interrogationHistory, isInterrogating]);
+  }, [currentCase, gameState.interrogationHistory, isInterrogating, findEvidence, showNotification]);
 
   const setSuspicionLevel = useCallback((characterId: string, level: number) => {
     setGameState(prev => ({
@@ -676,6 +763,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       loadingMessage,
       notification,
       showNotification,
+      startDemoCase,
     }}>
       {children}
     </GameContext.Provider>
