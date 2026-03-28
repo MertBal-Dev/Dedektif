@@ -594,7 +594,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setLoadingMessage('Kanıtlar değerlendiriliyor...');
 
     try {
-      const result = await evaluateAccusationAction(currentCase, characterId, evidenceIds);
+      const cleanCase = stripImagesFromCase(currentCase);
+      const result = await evaluateAccusationAction(cleanCase, characterId, evidenceIds);
       const suspect = currentCase.characters.find(c => c.id === characterId);
 
       // AI sonucunu hafızaya al (UI bunu kullanacak)
