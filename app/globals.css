@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #8b0000;
+  /* Dark Crimson */
+  --color-brand-secondary: #c0c0c0;
+  /* Silver */
+  --color-paper: #f4e4bc;
+  /* Parchment */
+  --color-detective-dark: #121212;
+  --color-detective-accent: #d4af37;
+  /* Gold */
+
+  --font-serif: "Playfair Display", serif;
+  --font-mono: "Courier Prime", monospace;
+}
+
+:root {
+  --background: #121212;
+  --foreground: #e5e5e5;
+  --card: #1e1e1e;
+  --card-foreground: #e5e5e5;
+  --popover: #1e1e1e;
+  --popover-foreground: #e5e5e5;
+  --primary: #8b0000;
+  --primary-foreground: #ffffff;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #e5e5e5;
+  --accent: #d4af37;
+  --accent-foreground: #121212;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  background-image: radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%);
+  min-height: 100vh;
+}
+
+/* Custom Utilities */
+@layer utilities {
+  .paper-texture {
+    background-color: #f4f1ea;
+    background-image: url("https://www.transparenttextures.com/patterns/natural-paper.png");
+    color: #2c2c2c;
+    box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.1), 5px 5px 15px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.typewriter-text {
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+}
+
+.detective-border {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+}
+
+.glow-text {
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.3), 0 0 20px rgba(212, 175, 55, 0.1);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
