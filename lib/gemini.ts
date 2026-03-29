@@ -6,7 +6,12 @@ const vertexAI = new VertexAI({
   project: process.env.GCP_PROJECT_ID || "",
   location: process.env.GCP_LOCATION || "us-central1",
   googleAuthOptions: process.env.GCP_SERVICE_ACCOUNT_KEY 
-    ? { credentials: JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY) }
+    ? { 
+        credentials: {
+          ...JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY),
+          private_key: JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY).private_key.replace(/\\n/g, '\n')
+        }
+      }
     : undefined
 });
 
