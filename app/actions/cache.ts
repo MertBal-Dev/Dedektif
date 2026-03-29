@@ -4,26 +4,26 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { Case } from '@/types/game';
 import { uploadAllCaseImages } from '@/utils/supabaseStorage';
 
-const CACHE_LIMIT_PER_THEME = 5;
-
 /**
- * Supabase Cache'den kullanıcının daha önce oynamadığı bir vaka getirir.
+ * Belirli bir temada, daha önce oynanmamış (cache'lenmiş) bir vaka getirir.
  */
-export async function getAvailableCaseFromCache(theme: string, playedIds: string[]): Promise<Case | null> {
+export async function getAvailableCaseFromCache(theme: string, playedIds: string[] = []): Promise<Case | null> {
   try {
     const supabase = getSupabaseAdmin();
 
-    console.log(`🔍 [CACHE QUERY] Tema: "${theme}", PlayedIDs: ${JSON.stringify(playedIds)}`);
-    
+    // ── HER ŞEYİ OKUYABİLEN ID SİSTEMİ ───────────────────────────────────────
+    // Artık DB kolon tipi TEXT olduğu için UUID zorunluluğu yok. 
+    // playedIds içindeki her şeyi (slug veya uuid) filtre olarak kullanabiliriz.
+    const validPlayedIds = (playedIds || []);
+
     let query = supabase
       .from('cases')
       .select('case_data')
-      .ilike('theme', theme.trim()); // Case-insensitive ve temiz arama
+      .eq('theme', theme);
 
-    if (playedIds && playedIds.length > 0) {
-      // UUID'ler tırnak içinde gönderilmeli: ("id1","id2")
-      const idsForPostgrest = `(${playedIds.map(id => `"${id}"`).join(',')})`;
-      query = query.not('id', 'in', idsForPostgrest);
+    if (validPlayedIds.length > 0) {
+      // Postgres IN operatörü TEXT dizisi ile her türlü stringi arayabilir.
+      query = query.not('id', 'in', `(${validPlayedIds.map(id => `"${id}"`).join(',')})`);
     }
 
     const { data, error } = await query
@@ -32,113 +32,121 @@ export async function getAvailableCaseFromCache(theme: string, playedIds: string
       .maybeSingle();
 
     if (error) {
-      console.error('❌ [CACHE QUERY ERROR]:', JSON.stringify(error, null, 2));
+      console.error('🔍 [CACHE QUERY ERROR]:', JSON.stringify(error, null, 2));
       return null;
     }
 
-    if (data) {
-      console.log(`✅ [CACHE HIT] Vaka başarıyla arşivden getirildi.`);
-      return data.case_data as unknown as Case;
-    } else {
-      console.log(`❌ [CACHE MISS] Veritabanında eşleşen vaka bulunamadı.`);
-      return null;
+    if (data && data.case_data) {
+      console.log(`✅ [CACHE HIT] "${data.case_data.title}" arşivden getirildi.`);
+      return data.case_data as Case;
     }
+
+    console.log(`❌ [CACHE MISS] "${theme}" için uygun vaka bulunamadı.`);
+    return null;
   } catch (err) {
-    console.error('getAvailableCaseFromCache beklenmedik hata:', err);
+    console.error('❌ [CACHE QUERY CRITICAL]:', err);
     return null;
   }
 }
 
 /**
- * Yeni üretilen bir vakayı görselleriyle birlikte Supabase Cache'e kaydeder.
- * Rotasyon mantığını uygular (Her tema için en fazla 5 vaka).
+ * Yeni üretilen bir vakayı görselleriyle birlikte arşive (Supabase) kaydeder.
  */
 export async function saveNewCaseToCache(caseObject: Case): Promise<boolean> {
   try {
-    const supabase = getSupabaseAdmin();
-    const caseId = caseObject.id;
-
     console.log(`📡 [CACHE SAVE START] ${caseObject.title} için vaka kaydı başlıyor...`);
+    const supabase = getSupabaseAdmin();
+
+    // ── HER ŞEYİ OKUYABİLEN ID SİSTEMİ ───────────────────────────────────────
+    // DB kolon tipi TEXT olduğu için UUID zorunluluğu kaldırıldı.
+    // slug (sanat-dunyasi-katli) veya uuid (550e8...) olduğu gibi kaydedilir.
+    const caseId = caseObject.id;
 
     // 1. İşlenecek görsel listesini hazırla
     const imageTasks: { url: string; name: string }[] = [];
     if (caseObject.generatedImageUrl) imageTasks.push({ url: caseObject.generatedImageUrl, name: 'main' });
     if (caseObject.victim?.generatedImageUrl) imageTasks.push({ url: caseObject.victim.generatedImageUrl, name: 'victim' });
     
-    caseObject.characters.forEach((c, i) => {
-      if (c.generatedImageUrl) imageTasks.push({ url: c.generatedImageUrl, name: `char_${i}` });
-    });
-    
-    caseObject.evidence.forEach((e, i) => {
-      if (e.generatedImageUrl) imageTasks.push({ url: e.generatedImageUrl, name: `ev_${i}` });
-      if (e.sceneImageUrl) imageTasks.push({ url: e.sceneImageUrl, name: `ev_scene_${i}` });
+    caseObject.characters.forEach((char, idx) => {
+      if (char.generatedImageUrl) imageTasks.push({ url: char.generatedImageUrl, name: `char_${idx}` });
     });
 
-    caseObject.chapters.forEach((ch, i) => {
-      if (ch.generatedImageUrl) imageTasks.push({ url: ch.generatedImageUrl, name: `chapter_${i}` });
+    caseObject.evidence.forEach((ev, idx) => {
+      if (ev.generatedImageUrl) imageTasks.push({ url: ev.generatedImageUrl, name: `ev_${idx}` });
+      if (ev.sceneImageUrl) imageTasks.push({ url: ev.sceneImageUrl, name: `ev_scene_${idx}` });
     });
 
-    caseObject.puzzles.forEach((p, i) => {
-      if (p.generatedImageUrl) imageTasks.push({ url: p.generatedImageUrl, name: `puzzle_${i}` });
+    caseObject.chapters.forEach((ch, idx) => {
+      if (ch.generatedImageUrl) imageTasks.push({ url: ch.generatedImageUrl, name: `chapter_${idx}` });
     });
 
-    console.log(`🖼️ [CACHE SAVE] ${imageTasks.length} adet görsel işlenecek...`);
+    caseObject.puzzles.forEach((p, idx) => {
+      if (p.generatedImageUrl) imageTasks.push({ url: p.generatedImageUrl, name: `puzzle_${idx}` });
+    });
 
-    // 2. Görselleri paralel olarak WebP'ye çevirip Storage'a yükle
+    // 2. Görselleri paralel işleyip Supabase Storage'a aktar (3'erli gruplar halinde)
     const urlMap = await uploadAllCaseImages(caseId, imageTasks);
-    console.log(`✅ [CACHE SAVE] Görsel işleme bitti. Yüklenen: ${Object.keys(urlMap).length}/${imageTasks.length}`);
-
-    // 3. Vaka verisindeki URL'leri yenileriyle güncelle (Deep Clone ve Update)
+    
+    // 3. Vaka objesini yeni storage URL'leri ile güncelle (Deep Copy)
     const updatedCase = JSON.parse(JSON.stringify(caseObject)) as Case;
     
-    const updateUrl = (oldUrl: string | undefined) => {
-      if (oldUrl && urlMap[oldUrl]) return urlMap[oldUrl];
-      return oldUrl;
-    };
-
-    updatedCase.generatedImageUrl = updateUrl(updatedCase.generatedImageUrl);
-    if (updatedCase.victim) updatedCase.victim.generatedImageUrl = updateUrl(updatedCase.victim.generatedImageUrl);
-    updatedCase.characters.forEach(c => { c.generatedImageUrl = updateUrl(c.generatedImageUrl); });
-    updatedCase.evidence.forEach(e => {
-      e.generatedImageUrl = updateUrl(e.generatedImageUrl);
-      e.sceneImageUrl = updateUrl(e.sceneImageUrl);
+    if (updatedCase.generatedImageUrl && urlMap[updatedCase.generatedImageUrl]) {
+      updatedCase.generatedImageUrl = urlMap[updatedCase.generatedImageUrl];
+    }
+    if (updatedCase.victim?.generatedImageUrl && urlMap[updatedCase.victim.generatedImageUrl]) {
+      updatedCase.victim.generatedImageUrl = urlMap[updatedCase.victim.generatedImageUrl];
+    }
+    
+    updatedCase.characters.forEach((char, idx) => {
+      const originalUrl = caseObject.characters[idx].generatedImageUrl;
+      if (originalUrl && urlMap[originalUrl]) {
+        char.generatedImageUrl = urlMap[originalUrl];
+      }
     });
-    updatedCase.chapters.forEach(ch => { ch.generatedImageUrl = updateUrl(ch.generatedImageUrl); });
-    updatedCase.puzzles.forEach(p => { p.generatedImageUrl = updateUrl(p.generatedImageUrl); });
 
-    // 4. Rotasyon Kontrolü (LRU)
-    console.log(`🔄 [CACHE SAVE] Rotasyon kontrolü yapılıyor (${updatedCase.theme})...`);
-    const { count } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .eq('theme', updatedCase.theme);
+    updatedCase.evidence.forEach((ev, idx) => {
+      const originalImgUrl = caseObject.evidence[idx].generatedImageUrl;
+      if (originalImgUrl && urlMap[originalImgUrl]) ev.generatedImageUrl = urlMap[originalImgUrl];
+      
+      const originalSceneUrl = caseObject.evidence[idx].sceneImageUrl;
+      if (originalSceneUrl && urlMap[originalSceneUrl]) ev.sceneImageUrl = urlMap[originalSceneUrl];
+    });
 
-    if (count && count >= CACHE_LIMIT_PER_THEME) {
-      console.log(`🧹 [CACHE SAVE] Tema limiti dolmuş (${count}), en eski vaka temizleniyor...`);
-      // En eski vakayı bul
-      const { data: oldest } = await supabase
+    updatedCase.chapters.forEach((ch, idx) => {
+      const originalUrl = caseObject.chapters[idx].generatedImageUrl;
+      if (originalUrl && urlMap[originalUrl]) ch.generatedImageUrl = urlMap[originalUrl];
+    });
+
+    updatedCase.puzzles.forEach((p, idx) => {
+      const originalUrl = caseObject.puzzles[idx].generatedImageUrl;
+      if (originalUrl && urlMap[originalUrl]) p.generatedImageUrl = urlMap[originalUrl];
+    });
+
+    console.log(`✅ [CACHE SAVE] Görsel işleme bitti. Yüklenen: ${Object.keys(urlMap).length}/${imageTasks.length}`);
+
+    // 4. Rotasyon Kontrolü (Max 5 vaka kuralı)
+    try {
+      const { data: existingCases } = await supabase
         .from('cases')
         .select('id')
         .eq('theme', updatedCase.theme)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
+        .order('created_at', { ascending: true });
 
-      if (oldest) {
-        // Önce Storage'daki klasörünü temizle (Dosyaları listele ve sil)
-        const { data: files } = await supabase.storage.from('case-images').list(oldest.id);
-        if (files && files.length > 0) {
-          await supabase.storage
-            .from('case-images')
-            .remove(files.map(f => `${oldest.id}/${f.name}`));
-        }
-        // DB'den sil
-        await supabase.from('cases').delete().eq('id', oldest.id);
+      if (existingCases && existingCases.length >= 5) {
+        const oldestId = existingCases[0].id;
+        console.log(`♻️ [CACHE ROTATION] Tema "${updatedCase.theme}" için 5 vaka doldu. Eskisi siliniyor: ${oldestId}`);
+        await supabase.from('cases').delete().eq('id', oldestId);
       }
+    } catch (rotErr) {
+      console.warn('⚠️ [CACHE ROTATION WARNING]:', rotErr);
     }
 
-    // 5. Yeni vakayı DB'ye kaydet (Varsa güncelle, yoksa ekle - Upsert)
-    console.log(`💾 [CACHE SAVE] Veritabanına upsert işlemi başlıyor...`);
+    // 5. Yeni vakayı DB'ye kaydet
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('❌ [CACHE SAVE ERROR] SUPABASE_SERVICE_ROLE_KEY eksik!');
+      return false;
+    }
+
     const { error: dbError } = await supabase
       .from('cases')
       .upsert({
@@ -149,11 +157,11 @@ export async function saveNewCaseToCache(caseObject: Case): Promise<boolean> {
       }, { onConflict: 'id' });
 
     if (dbError) {
-      console.error('💾 [CACHE SAVE ERROR] Veritabanı hatası:', JSON.stringify(dbError, null, 2));
-      throw dbError;
+      console.error('💾 [CACHE SAVE ERROR] Veritabanı hatası:', dbError.message);
+      return false;
     }
 
-    console.log(`🚀 [CACHE SAVE SUCCESS] ${updatedCase.title} başarıyla kaydedildi!`);
+    console.log(`🚀 [CACHE SAVE SUCCESS] "${updatedCase.title}" başarıyla arşivlendi! [ID: ${updatedCase.id}]`);
     return true;
   } catch (err) {
     console.error('❌ [CACHE SAVE CRITICAL] Beklenmedik hata:', err);

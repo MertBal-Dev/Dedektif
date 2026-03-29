@@ -4,11 +4,11 @@ import { Case, Character } from "@/types/game";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY || "");
 
 // Text generation models
-const MODEL_NAME = "gemini-2.5-flash";
-const MODEL_LITE_NAME = "gemini-2.5-flash-lite"; // For retries
+const MODEL_NAME = "gemini-2.5-flash";           // Vaka üretimi (kalite öncelikli)
+const MODEL_LITE_NAME = "gemini-2.5-flash-lite"; // Bulmaca & Sorgulama (hız öncelikli)
 
-const textModel = genAI.getGenerativeModel({ model: MODEL_NAME });
-const liteModel = genAI.getGenerativeModel({ model: MODEL_LITE_NAME });
+const textModel = genAI.getGenerativeModel({ model: MODEL_NAME });   // Sadece generateNewCase kullanır
+const liteModel = genAI.getGenerativeModel({ model: MODEL_LITE_NAME }); // İlk tercih: bulmaca & sorgulama
 
 const CASE_SYSTEM_PROMPT = `
 Sen dünya klasmanında bir polisiye hikaye yazarı ve oyun tasarımcısısın. Agatha Christie ve Raymond Chandler'ın ustalığını taşıyan, derin psikolojik karakterler ve zekice bulmacalar yaratan bir ustasın.
@@ -134,43 +134,107 @@ Her vaka MUTLAKA şunları içermelidir:
 - Kanıtlar; fiziksel nesneler (anahtar, mendil) olabileceği gibi, somut bir veriyi temsil eden belgeler (banka dökümü, günlük sayfası, eczane fişi, dijital kayıtlar) de olabilir.
 - **YARATICILIK:** Sadece "yerde bulunan bıçak" gibi klasiklerden kaçın. Örn: "Kurbanın banka dökümünde görünen şüpheli bir eczane harcaması", "Katilin olay yerinde unuttuğu, sadece belirli bir terziye ait olan nadir bir düğme", "Kurbanın telefonundaki yarım kalmış bir mesaj".
 - **ERA-SPECIFIC:** Senaryo dönemiyle %100 uyumlu olmalı. (Osmanlı'da banka dökümü olmaz ama mühürlü bir vergi defteri olabilir).
-- **PRESENTABILITY:** Kanıtlar, final suçlamasında "İşte kanıtım!" diyerek masaya konulabilecek netlikte olmalı. Soyut hisler ('Şüpheli yalan söylüyor gibiydi') kanıt sayılmaz.
-- locationDescription: Oyuncuya yönelik atmosferik arama tarifi
-- clueText: Bu kanıtın hikayeye kattığı somut ipucu (Örn: "Şüphelinin o gece orada olduğunu kanıtlıyor")
-- linkedCharacterId: Hangi karakterle ilişkili (dağılım asimetrik olduğu için null olabilir)
-- isHidden: (boolean) Eğer true ise, bu kanıt sahne taraması veya bulmaca ile BULUNAMAZ. Sadece sorgu odasında doğru sorular sorulduğunda karakterin [REVEAL:kanit_id] şeklinde cevap vermesiyle açılır. (Vakada en az 2 kanıt isHidden: true olmalıdır)
-- 2 kanıt başlangıçta bulunmuş (isFound: true), geri kalanlar keşfedilmeyi bekliyor
-- sceneImagePrompt: Kanıtın bulunduğu odanın/mekanın tamamını gösteren atmosferik sahne görseli için İNGİLİZCE prompt (nesne değil, MEKAN odaklı)
-- interactiveObjects: Bu mekanda oyuncunun tıklayabileceği 3-5 nesne. Her nesne şunları içermeli:
-  * id: benzersiz string (örn: "ev001_hali")
-  * label: kısa Türkçe nesne adı (örn: "Halı")
-  * x: 0-100 arası yatay konum yüzdesi (sol=0, sağ=100)
-  * y: 0-100 arası dikey konum yüzdesi (üst=0, alt=100)
-  * icon: temsil eden emoji (örn: "🔑", "📜", "🗄️", "🕯️", "📷")
-  * revealText: Türkçe, 1-2 cümle, atmosferik keşif metni. Bu nesneyi inceleyince ne görüldüğünü anlatır.
-  * isRevealed: false (başlangıç değeri)
-  * linkedEvidenceId: (ZORUNLU) Sahne taramasındaki nesnelerden EN AZ BİRİ (ve sadece biri), bu kanıtın kendi ID'sini veya bu sahne aracılığıyla bulunacak başka bir kanıtın ID'sini içermelidir. Bu alan kesinlikle null veya undefined bırakılmamalıdır (Zira aksi halde oyuncu hiçbir şey bulamaz).
+- **PRESENTABILITY:** Kanıtlar, final suçlamasında "İşte kanıtım!" diyerek masaya konulabilecek netlikte olmalı. Soyut hisler ('Şüpheli yalan söylüyor gibiydi') kanıt SAYILMAZ.
 
-**BULMACALAR (4 adet — çeşitli tipler):**
-- type seçenekleri: riddle (bilmece), code (şifre çözme), cipher (alfabe şifresi), logic (mantık sorusu), sequence (dizi tamamlama)
-- Her bulmaca çözüldüğünde bir kanıt açılıyor (unlocksEvidenceId)
-- difficulty: 'easy', 'medium', 'hard' — en az 1 easy, 1 hard olmalı
-- points: easy=100, medium=200, hard=400
-- imagePrompt: Bulmacayla ilgili görsel. ÖNEMLİ: Görsel doğrudan cevabı değil, cevaba giden bir ÇAĞRIŞIM veya İPUCU barındırmalıdır. (Örn: Cevap 'zehir' ise görselde sinsi bir yılan veya antik bir ilaç şişesi olabilir).
-- **SORGULAMA BAĞLANTISI:** Bazı bulmacaların çözümü veya kanıtların yeri, sadece doğru karakterleri doğru şekilde SORGULAYARAK öğrenilebilecek ipuçlarına bağlı olmalı.
+════════════════════════════════════════════════════════════
+ BULMACA KURALLARI — KESİN VE DEĞİŞMEZ (ZORUNLU UYUM)
+════════════════════════════════════════════════════════════
 
-**GÖRSELLER İÇİN imagePrompt FORMATI (IMAGEN-4 OPTIMIZED):**
-- Her imagePrompt şu formülü takip etmeli: \[Teknik Stil\] + \[Konu/İçerik\] + \[Granüler Dokular\] + \[Döneme Özgü Atmosfer/Işık\] + \[Lens Metadatası\]
-- Stil Kuralı: "Hyper-realistic photography, 8k resolution, natural skin textures, highly detailed facial features, cinematic lighting, 35mm lens".
-- Önemli: "game-like", "3D render", "digital art", "unreal engine" gibi ifadelerden KAÇIN. Tamamen gerçekçi bir fotoğrafçılık dili kullan.
-- **Örnek 1 (Modern):** "Realistic thriller photography, a broken smartphone on a glass table, neon rain reflections, Istanbul 2026, 8k, authentic textures, 35mm lens"
-- **Örnek 2 (Retro):** "Realistic noir photography, a bloodstained silk tie on a dusty wooden floor, flickering candlelight, 1945, 8k, authentic textures, 35mm lens"
-- **OPERASYONEL KURALLAR:**
-  * imagePrompt alanı ASLA BOŞ OLMAMALI! Tüm kanıtlar ve bulmacalar için özgün, atmosferik İNGİLİZCE promptlar üret.
-  * imagePrompt and sceneImagePrompt alanları vaka için seçilen **DÖNEM (ERA)** ve **TEMA (THEME)** ile %100 uyumlu olmalıdır.
-  * sceneImagePrompt: Mutlaka MEKAN odaklı (Wide Shot) olmalı. Bu mekanda gizli olan 'evidence' nesnesi ile görsel bir uyum içinde olmalıdır.
+**1. MANTIKSAL TUTARLILIK (EN KRİTİK KURAL):**
+Bir bulmaca üretmeden önce şu adımları ZİHNİNDE TAMAMLA:
+  ADIM 1: Cevabı (answer) belirle. Örn: "MURAT"
+  ADIM 2: Şifre tipini seç (aşağıdaki 3 tipten biri).
+  ADIM 3: Seçilen tipe göre şifreli hali ELLE hesapla.
+  ADIM 4: Soruyu (question), bu şifreli hali oyuncuya verecek şekilde yaz.
+  ADIM 5: Şifreli metni tekrar çözerek cevabın "MURAT" olduğunu doğrula.
+  ADIM 6: Ancak bu doğrulamadan sonra JSON'a yaz.
+Bu adımları atlayan veya kısaltan her üretim GEÇERSİZDİR.
 
-**İNTERAKTİF NESNE KOORDİNAT REHBERİ:**
+**2. İZİN VERİLEN ŞİFRE TİPLERİ (SADECE BU 3'Ü):**
+
+  TİP A — Caesar Shift (alfabede kaydırma):
+  • Türk alfabesi sırasıyla: A B C Ç D E F G Ğ H I İ J K L M N O Ö P R S Ş T U Ü V Y Z
+  • +1 kaydırma: Her harfi alfabede bir sonraki harfle değiştir. Son harf (Z) → A'ya döner.
+    Örnek: K-A-T-İ-L → L-B-U-J-M
+  • -1 kaydırma: Her harfi alfabede bir önceki harfle değiştir. İlk harf (A) → Z'ye döner.
+    Örnek: L-B-U-J-M → K-A-T-İ-L
+  • SORU'da kaydırma yönünü (+1 veya -1) MUTLAKA belirt.
+  • YASAK: +2, +3 veya başka miktarda kaydırma kullanma. Sadece +1 veya -1.
+
+  TİP B — Tersten Yazım (en basit ve güvenli tip):
+  • Cevabı tersine çevir, şifreli metin bu olur.
+    Örnek: cevap "KEMAL" → şifreli metin "LAMEK"
+  • SORU'da "Bu metni tersine çevirdiğinde cevabı bulursun" ifadesini kullan.
+
+  TİP C — İlk Harf Şifresi:
+  • Bir cümle veya kelime listesi ver. Her kelimenin İLK HARFİ sırasıyla cevabı oluşturur.
+    Örnek: cevap "NUR" → "Nisan Uçurtma Rüzgar" → N-U-R ✓
+  • SORU'da "Her kelimenin ilk harfini sırala" ifadesini kullan.
+  • Cümledeki kelime sayısı, cevabın harf sayısıyla AYNI olmalı.
+
+**3. KESİN YASAKLAR:**
+  ❌ Rastgele harf yığını üretme (KLSFJ, XQPWZ vb.) — BU OYUNU KILITAR. Oyuncu çözemez.
+  ❌ Yukarıdaki 3 tip dışında şifre kullanma (Vigenere, Morse, sembol vs.).
+  ❌ question ile answer arasında mantıksal köprü kurmadan JSON yazma.
+  ❌ "Bu harfler bir önceki harfle şifrelenmiştir" gibi belirsiz açıklamalar.
+
+**4. DOĞRULAMA ZORUNLULUĞU:**
+  Her bulmaca nesnesini JSON'a eklemeden önce içinden şunu söyle:
+  "Soru: [SORU METNİ] → Şifreli: [ŞİFRELİ METİN] → Çözüm adımı: [ADIM ADIM] → Cevap: [CEVAP]"
+  Bu doğrulama başarısız olursa o bulmacayı üretme, farklı bir tane üret.
+
+**5. ÖRNEK — DOĞRU ŞİFRE BULMACASI:**
+  {
+    "type": "cipher",
+    "title": "Şifreli Not",
+    "question": "Kurbanın cebinde şu not bulundu: 'MBSBL'. Her harfi Türk alfabesinde bir GERİ (-1) kaydırırsan katili bulursun.",
+    "answer": "LARAK",
+    ... 
+  }
+  ← Doğrulama: M→L, B→A, S→R, B→A, L→K → "LARAK" ✓
+
+════════════════════════════════════════════════════════════
+ OLAY YERİ NESNE BAĞI — KESİN VE DEĞİŞMEZ (ZORUNLU UYUM)
+════════════════════════════════════════════════════════════
+
+**TEMEL KURAL — "SAHNE VARSA BAĞLANTI ZORUNLU":**
+Bir evidence nesnesinin sceneImagePrompt alanı doluysa (yani olay yeri sahnesine sahipse),
+o evidence'ın interactiveObjects listesindeki nesnelerden EN AZ BİRİNİN linkedEvidenceId
+alanı o evidence'ın kendi id'sine eşit OLMAK ZORUNDADIR.
+
+Bu kuralı ihlal etmek oyunun kilitlenmesine neden olur. Oyuncu sahneye girer, her şeye
+tıklar ama hiçbir kanıt çıkmaz — oyun orada durur.
+
+**UYGULAMA ADIMLARI (Her evidence için sırayla yap):**
+  ADIM 1: Bu evidence'ın id'sini not et. Örn: "ev_kanit_003"
+  ADIM 2: sceneImagePrompt dolu mu? → Evet ise devam et.
+  ADIM 3: interactiveObjects listesini oluştur (3-5 nesne).
+  ADIM 4: Bu nesnelerden tam olarak BİRİNE linkedEvidenceId: "ev_kanit_003" ekle.
+           (Hangisinin kanıtı "sakladığı" hikayeyle tutarlı olsun — halının altındaki not,
+           vazonun içindeki anahtar, tablonun arkasındaki şifre vb.)
+  ADIM 5: Diğer nesnelerin linkedEvidenceId alanını null veya undefined bırak (onlar
+           sadece atmosfer/dekor nesnesi, tıklanınca revealText gösterir ama kanıt açmaz).
+
+**ÖRNEK — DOĞRU BAĞLANTI:**
+  {
+    "id": "kanit_007",
+    "sceneImagePrompt": "A dusty Ottoman study room...",
+    "interactiveObjects": [
+      { "id": "kanit_007_masa", "label": "Antika Masa", "linkedEvidenceId": null, ... },
+      { "id": "kanit_007_sandik", "label": "Sandık", "linkedEvidenceId": "kanit_007", ... },
+      { "id": "kanit_007_mum", "label": "Sönen Mum", "linkedEvidenceId": null, ... }
+    ]
+  }
+  ← "Sandık" tıklanınca "kanit_007" açılır ✓
+
+**HATA ÖRNEĞİ — YASAK:**
+  "interactiveObjects": [
+    { "id": "obj1", "linkedEvidenceId": null },
+    { "id": "obj2", "linkedEvidenceId": null },  ← HİÇBİRİ BAĞLI DEĞİL!
+    { "id": "obj3", "linkedEvidenceId": null }   ← OYUN KİLİTLENİR!
+  ]
+
+**KOORDİNAT REHBERİ:**
 Nesneleri gerçekçi konumlara yerleştir:
 - Zemin nesneleri (halı, sandık): y: 65-85
 - Masa/tezgah üzeri: y: 40-60
@@ -179,6 +243,17 @@ Nesneleri gerçekçi konumlara yerleştir:
 - Sağ köşe: x: 75-90
 - Orta alan: x: 40-60
 Nesneler birbirinin üstüne gelmesin (aralarında en az 15 birim mesafe olsun).
+
+**GÖRSELLER İÇİN imagePrompt FORMATI (IMAGEN-4 OPTIMIZED):**
+- Her imagePrompt şu formülü takip etmeli: [Teknik Stil] + [Konu/İçerik] + [Granüler Dokular] + [Döneme Özgü Atmosfer/Işık] + [Lens Metadatası]
+- Stil Kuralı: "Hyper-realistic photography, 8k resolution, natural skin textures, highly detailed facial features, cinematic lighting, 35mm lens".
+- Önemli: "game-like", "3D render", "digital art", "unreal engine" gibi ifadelerden KAÇIN. Tamamen gerçekçi bir fotoğrafçılık dili kullan.
+- **Örnek 1 (Modern):** "Realistic thriller photography, a broken smartphone on a glass table, neon rain reflections, Istanbul 2026, 8k, authentic textures, 35mm lens"
+- **Örnek 2 (Retro):** "Realistic noir photography, a bloodstained silk tie on a dusty wooden floor, flickering candlelight, 1945, 8k, authentic textures, 35mm lens"
+- **OPERASYONEL KURALLAR:**
+  * imagePrompt alanı ASLA BOŞ OLMAMALI! Tüm kanıtlar ve bulmacalar için özgün, atmosferik İNGİLİZCE promptlar üret.
+  * imagePrompt and sceneImagePrompt alanları vaka için seçilen **DÖNEM (ERA)** ve **TEMA (THEME)** ile %100 uyumlu olmalıdır.
+  * sceneImagePrompt: Mutlaka MEKAN odaklı (Wide Shot) olmalı. Bu mekanda gizli olan 'evidence' nesnesi ile görsel bir uyum içinde olmalıdır.
 
 Dil: TÜRKÇE (Tüm metin içerikleri Türkçe, ama imagePrompt ve sceneImagePrompt İNGİLİZCE olmalı)
 Format: Saf JSON. Hiçbir açıklama, markdown işareti ekleme.
@@ -192,7 +267,7 @@ Format: Saf JSON. Hiçbir açıklama, markdown işareti ekleme.
 
 JSON Şeması:
 {
-  "id": "string (unique, slug format)",
+  "id": "string (unique UUID format, e.g. 550e8400-e29b-41d4-a716-446655440000)",
   "title": "string",
   "introduction": "string (2-3 cümle özet)",
   "fullStory": "string (5+ paragraf, zengin, detaylı)",
@@ -260,7 +335,7 @@ JSON Şeması:
           "icon": "string (emoji)",
           "revealText": "string (Türkçe, atmosferik 1-2 cümle)",
           "isRevealed": false,
-          "linkedEvidenceId": "string veya undefined (sadece 1 nesnede olmalı)"
+          "linkedEvidenceId": "string veya null — sceneImagePrompt varsa EN AZ BİR nesnede bu alan evidence'ın kendi id'si olmalı, diğerleri null"
         }
       ]
     }
@@ -285,9 +360,6 @@ JSON Şeması:
 `;
 
 // ─── Spatial Prompt Helper ────────────────────────────────────────────────────
-// İnteraktif nesne koordinatlarını (x, y yüzdesi) İngilizce konum tanımına dönüştürür.
-// Bu bilgi sceneImagePrompt'a eklenerek Imagen'ın nesneleri doğru konuma yerleştirme
-// başarısını artırır.
 function coordinateToSpatialLabel(x: number, y: number): string {
   const hLabel = x < 25 ? 'far left' : x < 42 ? 'left-center' : x < 58 ? 'center' : x < 75 ? 'right-center' : 'far right';
   const vLabel = y < 20 ? 'top' : y < 40 ? 'upper' : y < 60 ? 'middle' : y < 78 ? 'lower' : 'bottom';
@@ -299,7 +371,6 @@ function injectSpatialContext(scenePrompt: string, objects: { label: string; x: 
   const placements = objects
     .map(o => `"${o.label}" (${o.icon}) at the ${coordinateToSpatialLabel(o.x, o.y)} of the frame`)
     .join(', ');
-  // Prompt'un sonuna konum bağlamını ekle — yeni cümle
   return `${scenePrompt.trimEnd()}, scene must prominently include: ${placements}.`;
 }
 
@@ -314,7 +385,18 @@ Talimatlar:
 - Bulmacalar zekice ama adil olmalı - oyuncu ipucuyla çözebilmeli
 - Katil beklenmedik biri olmalı ama mantıklı
 - Her kanıt için mutlaka interactiveObjects listesi üret (3-5 nesne, gerçekçi koordinatlar)
-- sceneImagePrompt her kanıt için ayrı ve MEKAN odaklı olmalı`;
+- sceneImagePrompt her kanıt için ayrı ve MEKAN odaklı olmalı
+
+BULMACA KONTROL LİSTESİ (Her bulmaca için uygula):
+□ Cevabı önce belirledim
+□ 3 izin verilen şifre tipinden birini seçtim (Caesar +1/-1, Tersten, İlk Harf)
+□ Şifreli metni elle hesapladım ve doğruladım
+□ Soru ile cevap arasında %100 mantıksal köprü kurdum
+□ Rastgele harf yığını üretmedim
+
+OLAY YERİ KONTROL LİSTESİ (Her evidence için uygula):
+□ sceneImagePrompt dolu olan her evidence için interactiveObjects içinde en az 1 nesnenin linkedEvidenceId = evidence.id olduğunu doğruladım
+□ Hiçbir sahne "kanıtsız" değil — oyuncu her sahneden bir şey bulabilecek`;
 
   try {
     let responseText;
@@ -330,10 +412,18 @@ Talimatlar:
     const cleanText = responseText
       .replace(/```json\n?/g, "")
       .replace(/```\n?/g, "")
-      .replace(/:\s*undefined\b/g, ": null") // Fail-safe: undefined'ları null yap
+      .replace(/:\s*undefined\b/g, ": null")
       .trim();
 
     const parsed = JSON.parse(cleanText) as Case;
+
+    // ── UUID FIX ──────────────────────────────────────────────────────────
+    const idIsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.id);
+    if (!idIsUuid) {
+      const { randomUUID } = await import('crypto');
+      parsed.id = randomUUID();
+      console.log(`🆔 [UUID FIX] Geçersiz ID yeni UUID ile değiştirildi: ${parsed.id}`);
+    }
 
     // ── Normalize: zorunlu alanların varlığını garantile ──────────────────
     if (!parsed.chapters) parsed.chapters = [];
@@ -341,7 +431,7 @@ Talimatlar:
       parsed.victim = { name: "Bilinmiyor", age: 0, profession: "", description: "", imagePrompt: "" };
     }
 
-    // ── YENİ: Her evidence için interactiveObjects normalize et ───────────
+    // ── Evidence normalize + güvenlik kontrolleri ─────────────────────────
     if (parsed.evidence) {
       parsed.evidence = parsed.evidence.map(ev => {
         const normalizedObjects = (ev.interactiveObjects || []).map(obj => ({
@@ -349,19 +439,22 @@ Talimatlar:
           isRevealed: false, // Her zaman false başlat — güvenlik
         }));
 
-        // ── SPATIAL PROMPTING: Koordinatları İngilizce konuma çevir ──────
-        // sceneImagePrompt'a nesne konum bilgisini ekleyerek Imagen'ın
-        // nesneleri doğru yere yerleştirme başarısını artırıyoruz.
+        // ── SPATIAL PROMPTING ─────────────────────────────────────────────
         const enrichedScenePrompt = ev.sceneImagePrompt
           ? injectSpatialContext(ev.sceneImagePrompt, normalizedObjects)
           : ev.sceneImagePrompt;
 
-        // ── GÜVENLİK: Eğer sahne taraması varsa ama hiçbir nesne kanıta bağlanmamışsa ──
+        // ── GÜVENLİK: Sahne varsa ama hiçbir nesne kanıta bağlı değilse ──
+        // Bu kontrol AI'nın "linkedEvidenceId" eklemeyi unuttuğu durumları yakalar.
         if (ev.sceneImagePrompt && normalizedObjects.length > 0) {
           const hasLink = normalizedObjects.some(obj => obj.linkedEvidenceId);
           if (!hasLink) {
-            // İlk nesneyi dümenden bu kanıta bağla (Oyuncu takılı kalmasın)
+            // İlk nesneyi bu kanıta bağla — oyuncu eli boş dönmesin
             normalizedObjects[0].linkedEvidenceId = ev.id;
+            console.warn(
+              `🔗 [SCENE LINK FIX] "${ev.id}" kanıtının sahnesi bağlantısız bulundu. ` +
+              `İlk nesne ("${normalizedObjects[0].label || normalizedObjects[0].id}") otomatik olarak bağlandı.`
+            );
           }
         }
 
@@ -373,7 +466,7 @@ Talimatlar:
       });
     }
 
-    // ── YENİ: Her puzzle için interactiveObjects normalize et ─────────────
+    // ── Puzzle normalize ──────────────────────────────────────────────────
     if (parsed.puzzles) {
       parsed.puzzles = parsed.puzzles.map(p => ({
         ...p,
@@ -498,11 +591,11 @@ DEĞERLENDİRME KRİTERLERİ:
   try {
     let responseText;
     try {
-      const result = await textModel.generateContent(systemPrompt);
+      const result = await liteModel.generateContent(systemPrompt);
       responseText = result.response.text();
     } catch (e) {
-      console.warn("Puzzle evaluation primary model failed, retrying with Lite...", e);
-      const result = await liteModel.generateContent(systemPrompt);
+      console.warn("Puzzle evaluation lite model failed, retrying with Flash...", e);
+      const result = await textModel.generateContent(systemPrompt);
       responseText = result.response.text();
     }
 
