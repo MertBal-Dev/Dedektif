@@ -87,9 +87,16 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <button
             onClick={() => {
-              const theme = selectedTheme
+              let theme = selectedTheme
                 ? THEMES.find(t => t.id === selectedTheme)?.label
                 : undefined;
+
+              // Eğer hiçbir tema seçilmemişse (Rastgele butonu), 6 temadan birini ata
+              if (!theme) {
+                const randomIdx = Math.floor(Math.random() * THEMES.length);
+                theme = THEMES[randomIdx].label;
+              }
+
               startNewCase(theme);
             }}
             disabled={isLoading}

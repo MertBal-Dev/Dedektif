@@ -24,8 +24,7 @@ const INITIAL_GAME_STATE: GameState = {
   suspicionLevels: {},
   notebookEntries: [],
   discoveredChapterIds: [],
-  // ── YENİ ──────────────────────────────────────────────────────────────────
-  revealedObjectIds: [], // "evidenceId:objectId" formatında tutulan keşfedilmiş nesneler
+  revealedObjectIds: [],
   puzzleAttempts: {},
 };
 
@@ -48,8 +47,6 @@ interface GameContextType {
   addNotebookEntry: (entry: string) => void;
   useHint: (puzzleId: string) => string | null;
   exitCase: () => void;
-  // ── YENİ ──────────────────────────────────────────────────────────────────
-  // Returns null on success, or a string message if blocked (wrong channel)
   revealInteractiveObject: (evidenceId: string, objectId: string) => string | null;
   isObjectRevealed: (evidenceId: string, objectId: string) => boolean;
   generationProgress: number;
@@ -126,9 +123,6 @@ async function clearCaseFromDB(): Promise<void> {
   }
 }
 
-/**
- * Strips all base64 image data from a Case object before sending to server actions.
- */
 function stripImagesFromCase(caseData: Case): Case {
   return {
     ...caseData,
@@ -138,7 +132,7 @@ function stripImagesFromCase(caseData: Case): Case {
     evidence: caseData.evidence.map(e => ({
       ...e,
       generatedImageUrl: undefined,
-      sceneImageUrl: undefined, // ── YENİ: sahne görselini de temizle
+      sceneImageUrl: undefined,
     })),
     puzzles: caseData.puzzles.map(p => ({ ...p, generatedImageUrl: undefined })),
     chapters: (caseData.chapters || []).map(ch => ({ ...ch, generatedImageUrl: undefined })),
@@ -157,7 +151,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const showNotification = useCallback((type: 'success' | 'info' | 'warning', text: string) => {
     setNotification({ type, text });
-    setTimeout(() => setNotification(null), 3500);
+    setTimeout(() => setNotification(null), 6000);
   }, []);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -177,7 +171,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setConfrontationResult(null);
   }, []);
 
-  // Detect/Load saved game on mount
   useEffect(() => {
     const checkStorage = async () => {
       try {
@@ -219,24 +212,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [showNotification]);
 
-  // Persist game state
   useEffect(() => {
-    // SADECE aktif bir vaka varsa kaydet. 
-    // Böylece ana menüye dönüldüğünde (currentCase null iken) son geçerli kayıt silinmez.
     if (hasHydrated && currentCase) {
       localStorage.setItem('dedektif_game_state_v2', JSON.stringify(gameState));
       setHasSavedGame(true);
     }
   }, [gameState, hasHydrated, currentCase]);
 
-  // Persist current case
   useEffect(() => {
     if (hasHydrated && currentCase) {
       saveCaseToDB(currentCase).catch(console.warn);
     }
   }, [currentCase, hasHydrated]);
 
-  // Auto-unlock chapters based on found evidence count
   useEffect(() => {
     if (!currentCase?.chapters) return;
     const foundCount = gameState.foundEvidenceIds.length;
@@ -271,7 +259,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setLoadingMessage('Soruşturma dosyası açılıyor...');
     setError(null);
 
-    // ── Aşamalı yükleme mesajları (Plan Madde 2) ────────────────────────────
     const simulationPhases = [
       { progress: 5, message: 'Suç mahalli inceleniyor...' },
       { progress: 12, message: 'Olay yeri kordon altına alınıyor...' },
@@ -284,7 +271,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       { progress: 82, message: 'Kanıt dosyaları düzenleniyor...' },
     ];
 
-    // AI cevabı gelene kadar barı %5'ten %90'a kadar simüle et
     let phaseIndex = 0;
     const simulationInterval = setInterval(() => {
       if (phaseIndex < simulationPhases.length) {
@@ -293,7 +279,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setLoadingMessage(phase.message);
         phaseIndex++;
       }
-    }, 1800); // Her 1.8 saniyede bir aşama geç
+    }, 1800);
 
     const messages = [
       'Olay yeri kordon altına alınıyor...',
@@ -307,7 +293,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     ];
 
     try {
-      // 1. ADIM: Metin Verisi (Hızlı) — AI cevabı geldiğinde simülasyonu durdur
+      // 1. ADIM: Metin Verisi (Hızlı)
       const baseCase = await generateBaseCaseAction(theme);
       clearInterval(simulationInterval);
 
@@ -318,20 +304,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const updatedCase = { ...baseCase };
       const tasks: { type: string; prompt: string; setter: (url: string) => void }[] = [];
 
-      // Ana görsel
       tasks.push({ type: 'main', prompt: baseCase.imagePrompt, setter: (url) => { updatedCase.generatedImageUrl = url; } });
 
-      // Kurban
       if (baseCase.victim) {
         tasks.push({ type: 'victim', prompt: baseCase.victim.imagePrompt, setter: (url) => { if (updatedCase.victim) updatedCase.victim.generatedImageUrl = url; } });
       }
 
-      // Şüpheliler
       baseCase.characters.forEach((char, idx) => {
         tasks.push({ type: 'char', prompt: char.imagePrompt, setter: (url) => { updatedCase.characters[idx].generatedImageUrl = url; } });
       });
 
-      // Kanıtlar (Obje + Sahne)
       baseCase.evidence.forEach((ev, idx) => {
         tasks.push({ type: 'ev-obj', prompt: ev.imagePrompt, setter: (url) => { updatedCase.evidence[idx].generatedImageUrl = url; } });
         if (ev.sceneImagePrompt) {
@@ -339,28 +321,43 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
       });
 
-      // Bölümler (Chapters)
       baseCase.chapters.forEach((ch, idx) => {
         tasks.push({ type: 'chapter', prompt: ch.imagePrompt, setter: (url) => { updatedCase.chapters[idx].generatedImageUrl = url; } });
       });
 
-      // Bulmacalar
       baseCase.puzzles.forEach((p, idx) => {
         if (p.imagePrompt) {
           tasks.push({ type: 'puzzle', prompt: p.imagePrompt, setter: (url) => { updatedCase.puzzles[idx].generatedImageUrl = url; } });
         }
       });
 
-      // 3. ADIM: Görselleri Sırayla Üret ve İlerlemeyi Güncelle
-      for (let i = 0; i < tasks.length; i++) {
-        const t = tasks[i];
-        const currentProgress = 10 + Math.round(((i + 1) / tasks.length) * 85);
-        setGenerationProgress(currentProgress);
-        setLoadingMessage(messages[i % messages.length]);
+      // ── YENİ 3. ADIM: PARALEL HAVUZ (CHUNKING) MANTIĞI ───────────────────────
+      // Artık görselleri tek tek beklemiyoruz. 3'lü gruplar halinde aynı anda istiyoruz.
+      const chunkSize = 3;
 
-        const imageUrl = await generateSingleImageAction(t.prompt);
-        if (imageUrl) t.setter(imageUrl);
+      for (let i = 0; i < tasks.length; i += chunkSize) {
+        // Sıradaki 3 görevi (chunk) al
+        const chunk = tasks.slice(i, i + chunkSize);
+
+        // Progress bar ve yükleme mesajını güncelle
+        const completedTasks = Math.min(i + chunkSize, tasks.length);
+        const currentProgress = 10 + Math.round((completedTasks / tasks.length) * 85);
+        setGenerationProgress(currentProgress);
+        setLoadingMessage(messages[Math.floor(i / chunkSize) % messages.length]);
+
+        // Bu 3 görevin hepsini AYNI ANDA server'a gönder ve hepsinin dönmesini bekle
+        await Promise.all(
+          chunk.map(async (t) => {
+            try {
+              const imageUrl = await generateSingleImageAction(t.prompt);
+              if (imageUrl) t.setter(imageUrl);
+            } catch (err) {
+              console.error(`Görsel üretilirken hata oluştu (${t.type}):`, err);
+            }
+          })
+        );
       }
+      // ─────────────────────────────────────────────────────────────────────────
 
       setGenerationProgress(98);
       setLoadingMessage('Kanıt dosyaları mühürleniyor...');
@@ -410,13 +407,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const findEvidence = useCallback((evidenceId: string) => {
     if (!currentCase) return;
 
-    // Güvenlik: Kanıt vaka dosyasında var mı?
     const targetEvidence = currentCase.evidence.find(e => e.id === evidenceId);
     if (!targetEvidence) return;
 
     const now = new Date().toISOString();
 
-    // 1. Case verisini güncelle (isFound: true)
     setCurrentCase(prev => {
       if (!prev) return prev;
       return {
@@ -427,29 +422,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
       };
     });
 
-    // 2. Global state'i güncelle (functional update ile stale closure engellenir)
     setGameState(prev => {
       if (prev.foundEvidenceIds.includes(evidenceId)) return prev;
-      
-      // Başarı bildirimi göster (Plan Madde 3)
+
       showNotification('success', targetEvidence.title + ' dosyaya eklendi! Kanıtlar sekmesini incele.');
-      
+
       return {
         ...prev,
         foundEvidenceIds: [...prev.foundEvidenceIds, evidenceId],
         score: prev.score + 150,
       };
     });
-  }, [currentCase]);
+  }, [currentCase, showNotification]);
 
-  // ── YENİ: İnteraktif nesne keşfetme — STRICT LOGIC GATE ─────────────────────
-  // Dönüş değeri: null = başarı, string = engel mesajı (UI'da gösterilecek)
   const revealInteractiveObject = useCallback((evidenceId: string, objectId: string): string | null => {
     if (!currentCase) return null;
 
     const compositeKey = `${evidenceId}:${objectId}`;
 
-    // Zaten keşfedildiyse tekrar işlem yapma
     if (gameState.revealedObjectIds.includes(compositeKey)) return null;
 
     const evidence = currentCase.evidence.find(e => e.id === evidenceId);
@@ -458,23 +448,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const obj = evidence.interactiveObjects?.find(o => o.id === objectId);
     if (!obj) return null;
 
-    // ── STRICT LOGIC GATE ────────────────────────────────────────────────────
-    // KANAL 1: Sorgu kanalı — linkedEvidence isHidden:true ise sadece sorgu ile açılır
     if (obj.linkedEvidenceId) {
       const linkedEv = currentCase.evidence.find(e => e.id === obj.linkedEvidenceId);
       if (linkedEv?.isHidden) {
         return `🔒 Bu nesnede gizli bir ipucu var, ancak önce doğru şüpheliyi sorgulayarak bu bilgiyi açığa çıkarmalısın.`;
       }
 
-      // KANAL 2: Bulmaca kanalı — linkedEvidence başka bir puzzle'ın ödülüyse
       const linkedPuzzle = currentCase.puzzles.find(p => p.unlocksEvidenceId === obj.linkedEvidenceId);
       if (linkedPuzzle && !linkedPuzzle.isSolved) {
         return `🧩 Bu nesne bir bulmacayla kilitli. "${linkedPuzzle.title}" bulmacasını çözersen bu kanıta ulaşabilirsin.`;
       }
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
-    // currentCase içindeki evidence'ı bul ve nesneyi işaretle
     setCurrentCase(prev => {
       if (!prev) return prev;
       return {
@@ -491,22 +476,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
       };
     });
 
-    // Game state'e kaydet ve küçük puan ver
     setGameState(prev => ({
       ...prev,
       revealedObjectIds: [...prev.revealedObjectIds, compositeKey],
-      score: prev.score + 25, // Nesne keşfetme puanı
+      score: prev.score + 25,
     }));
 
-    // KANAL 1 (Saha): LinkedEvidenceId varsa ve engel yoksa kanıtı aç
     if (obj.linkedEvidenceId) {
       findEvidence(obj.linkedEvidenceId);
     }
 
-    return null; // Başarı — engel yok
+    return null;
   }, [currentCase, gameState.revealedObjectIds, findEvidence]);
 
-  // ── YENİ: Nesnenin keşfedilip keşfedilmediğini kontrol et ────────────────────
   const isObjectRevealed = useCallback((evidenceId: string, objectId: string): boolean => {
     return gameState.revealedObjectIds.includes(`${evidenceId}:${objectId}`);
   }, [gameState.revealedObjectIds]);
@@ -527,7 +509,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
         imagePrompt: undefined,
       };
 
-      // Deneme sayısını artır
       const currentAttempts = (gameState.puzzleAttempts[puzzleId] || 0) + 1;
       setGameState(prev => ({
         ...prev,
@@ -573,7 +554,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         feedback: isCorrect ? 'Doğru! (Basit eşleşme ile doğrulandı)' : 'Yanlış cevap.',
       };
     }
-  }, [currentCase, findEvidence]);
+  }, [currentCase, findEvidence, gameState.puzzleAttempts]);
 
   const interrogate = useCallback(async (
     characterId: string,
@@ -601,20 +582,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
         cleanCharacter,
         question,
         history.slice(-10),
-        currentCase.evidence // Kanıt listesini gönder
+        currentCase.evidence
       );
 
-      // ── YENİ: REVEAL Etiketi Kontrolü ──────────────────────────────────────
       let response = rawResponse;
       const revealMatch = rawResponse.match(/\[REVEAL:(.+?)\]/);
       if (revealMatch) {
         const revealedId = revealMatch[1];
-        // Etiketi metinden temizle (opsiyonel, ama daha temiz görünür)
         response = rawResponse.replace(/\[REVEAL:.+?\]/g, '').trim();
 
-        // findEvidence fonksiyonu kendi içinde "zaten bulundu mu" kontrolünü 
-        // functional update ile yaptığı için burada tekrar kontrol etmeye gerek yok, 
-        // ama kullanıcıya bildirim göndermek için stale-safe bir şekilde kontrol edelim.
         setGameState(prev => {
           if (!prev.foundEvidenceIds.includes(revealedId)) {
             findEvidence(revealedId);
@@ -685,7 +661,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const result = await evaluateAccusationAction(cleanCase, characterId, evidenceIds);
       const suspect = currentCase.characters.find(c => c.id === characterId);
 
-      // AI sonucunu hafızaya al (UI bunu kullanacak)
       setConfrontationResult({ ...result, suspect });
 
       if (result.isCorrect && suspect) {
@@ -695,7 +670,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
           - (gameState.hintsUsed * 50)
         );
 
-        // State'i güncelliyoruz ki vaka çözülmüş sayılsın (Arka planda)
         setGameState(prev => ({
           ...prev,
           solvedCaseIds: [...prev.solvedCaseIds, currentCase.id],
@@ -725,7 +699,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setCurrentCase(null);
     setCaseResolution(null);
     setGameState(INITIAL_GAME_STATE);
-    // Kaydı silmiyoruz, böylece ana ekrandan "Devam Et" denebilir.
   }, []);
 
   const clearStorage = useCallback(async () => {
@@ -778,7 +751,6 @@ export function useGameContext() {
   return context;
 }
 
-// ─── Yardımcı: Eski/eksik vaka verilerini normalize et ────────────────────────
 function normalizeCase(caseData: Case): Case {
   return {
     ...caseData,

@@ -105,34 +105,40 @@ function EvidenceZoomOverlay({ evidence, onClose }: { evidence: Evidence; onClos
           </div>
 
           {/* Details Section */}
-          <div className="flex-1 p-8 md:p-12 flex flex-col justify-center bg-[#0d0c0a] border-l border-white/5">
-            <div className="space-y-6">
-              <div className="flex items-center gap-3 text-amber-500/60 uppercase tracking-[0.3em] text-[10px] font-bold">
-                <ScanSearch size={14} />
-                Analiz Sonucu
-              </div>
+          <div className="flex-1 flex flex-col bg-[#0d0c0a] border-l border-white/5 overflow-hidden">
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-8 md:p-12 space-y-8">
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 text-amber-500/60 uppercase tracking-[0.3em] text-[10px] font-bold">
+                  <ScanSearch size={14} />
+                  Analiz Sonucu
+                </div>
 
-              <div className="space-y-4">
-                <p className="text-xl md:text-2xl font-serif text-gray-200 italic leading-relaxed quote-text">
-                  "{evidence.clueText}"
-                </p>
-                <div className="w-12 h-1 bg-amber-900/30 rounded-full" />
-              </div>
+                <div className="space-y-4">
+                  <p className="text-xl md:text-2xl font-serif text-gray-200 italic leading-relaxed quote-text">
+                    "{evidence.clueText}"
+                  </p>
+                  <div className="w-12 h-1 bg-amber-900/30 rounded-full" />
+                </div>
 
-              <div className="pt-4">
-                <p className="text-xs text-gray-500 leading-relaxed font-mono uppercase tracking-widest opacity-60">
-                  Dosya No: {evidence.id.split('-')[0]}<br />
-                  Konum: {evidence.location}
-                </p>
+                <div className="pt-4">
+                  <p className="text-xs text-gray-500 leading-relaxed font-mono uppercase tracking-widest opacity-60">
+                    Dosya No: {evidence.id.split('-')[0]}<br />
+                    Konum: {evidence.location}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="mt-12 w-full py-4 border border-amber-900/30 hover:border-amber-500/50 hover:bg-amber-500/5 text-amber-500/80 hover:text-amber-400 text-[10px] font-black uppercase tracking-[0.3em] transition-all rounded-lg"
-            >
-              İncelemeyi Kapat
-            </button>
+            {/* Sticky Footer Button */}
+            <div className="p-6 md:p-8 pt-0 bg-gradient-to-t from-[#0d0c0a] via-[#0d0c0a] to-transparent">
+              <button
+                onClick={onClose}
+                className="w-full py-4 border border-amber-900/30 hover:border-amber-500/50 hover:bg-amber-500/5 text-amber-500/80 hover:text-amber-400 text-[10px] font-black uppercase tracking-[0.3em] transition-all rounded-lg"
+              >
+                İncelemeyi Kapat
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>

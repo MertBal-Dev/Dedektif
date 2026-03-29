@@ -300,6 +300,7 @@ function injectSpatialContext(scenePrompt: string, objects: { label: string; x: 
 export async function generateNewCase(theme: string = "Noir Gerilim"): Promise<Case> {
   const prompt = `Yeni bir dedektiflik vakası oluştur. 
 Tema: ${theme}
+
 Talimatlar:
 - Hikaye çok atmosferik, Türk kültürüne özgü detaylar içermeli (çay, rakı, konak, yalı, esnaf vb.)  
 - Şüphelilerin her birinin maktulle derin, gizemli bir geçmişi olsun

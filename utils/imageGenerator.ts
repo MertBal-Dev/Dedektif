@@ -21,8 +21,8 @@ async function generateGeminiImage(prompt: string, modelId: string): Promise<str
   if (method === "predict") {
     // --- IMAGEN (PREDICT) FORMATI ---
     body = {
-      instances: [{ 
-        prompt: `${prompt}, hyper-realistic photography, 8k resolution, cinematic lighting, natural skin textures, 35mm lens, film noir atmosphere, detailed facial features` 
+      instances: [{
+        prompt: `${prompt}, hyper-realistic photography, 8k resolution, cinematic lighting, natural skin textures, 35mm lens, film noir atmosphere, detailed facial features`
       }],
       parameters: {
         sampleCount: 1,
@@ -34,12 +34,11 @@ async function generateGeminiImage(prompt: string, modelId: string): Promise<str
     // --- GEMINI MULTIMODAL (GENERATECONTENT) FORMATI ---
     body = {
       contents: [{
-        parts: [{ 
-          text: `Generate a high-quality, professional image: ${prompt}, hyper-realistic photography, cinematic lighting, film noir atmosphere.` 
+        parts: [{
+          text: `Generate a high-quality, professional image: ${prompt}, hyper-realistic photography, cinematic lighting, film noir atmosphere.`
         }]
       }],
       generationConfig: {
-        // Multimodal image generation için özel parametreler (gerekirse burası modele göre değişebilir)
         candidateCount: 1,
       }
     };
@@ -59,17 +58,14 @@ async function generateGeminiImage(prompt: string, modelId: string): Promise<str
     }
 
     const data = await response.json();
-    
+
     // --- RESPONS PARSING ---
     if (method === "predict") {
-      // Imagen formatı: predictions[0].bytesBase64Encoded
       if (data.predictions?.[0]?.bytesBase64Encoded) {
         console.log(`🎨 Generated image via Gemini Imagen (${modelId})`);
         return `data:image/webp;base64,${data.predictions[0].bytesBase64Encoded}`;
       }
     } else {
-      // Gemini formatı: candidates[0].content.parts[0].inline_data.data (genelde blob döner)
-      // Veya bazı preview modellerde farklı olabilir, en yaygın olanı kontrol et:
       const part = data.candidates?.[0]?.content?.parts?.[0];
       if (part?.inlineData?.data) {
         console.log(`🎨 Generated image via Gemini Multimodal (${modelId})`);
@@ -106,33 +102,34 @@ async function generatePollinationsImage(prompt: string, useKey: boolean = true)
 }
 
 /**
+ * Helper to delay between sequential requests to avoid Rate Limits (429).
+ */
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
  * Main image generation entry point with Multi-Model Retry logic.
  * Optimized for 2026: Min Cost, Max Quality.
  */
 export async function generateImage(prompt: string): Promise<string | null> {
-  // ── Fiyat/Performans ve Kota Odaklı Sıralama (Best to Fallback) ────────────────
   const geminiModels = [
-    "imagen-4.0-fast-generate-001",       // Imagen 4 Fast (Hızlı ve kaliteli)
-    "gemini-2.5-flash-image",             // Nano Banana (En yüksek kota/hız)
-    "gemini-3.1-flash-image-preview",     // Nano Banana 2 (Yeni nesil denge)
-    "imagen-4.0-generate-001",            // Imagen 4 (Yüksek kalite)
-    "gemini-3-pro-image-preview",         // Nano Banana Pro (Üstün kalite)
-    "imagen-4.0-ultra-generate-001",      // Imagen 4 Ultra (En üst kalite, düşük kota)
-    "nano-banana-pro-preview",            // Alternatif Pro (Son çare Gemini)
-    "imagen-3.0-fast-generate-001",       // Eski nesil hızlı
-    "imagen-3.0-generate-001"             // Eski nesil standart
+    "gemini-2.5-flash-image",
+    "gemini-3.1-flash-image-preview",
+    "nano-banana-pro-preview",
+    "imagen-4.0-fast-generate-001",
+    "imagen-4.0-generate-001",
+    "gemini-3-pro-image-preview",
+    "imagen-4.0-ultra-generate-001",
+    "imagen-3.0-fast-generate-001",
+    "imagen-3.0-generate-001"
   ];
 
   for (const modelId of geminiModels) {
-    // API URL için 'models/' prefix'ini ekle (eğer yoksa)
     const fullModelId = modelId.startsWith("models/") ? modelId : `models/${modelId}`;
     const img = await generateGeminiImage(prompt, fullModelId);
     if (img) return img;
-    // Rate limit yememek için başarısız denemeler arası küçük bekleme
     await wait(300);
   }
 
-  // ── Ücretli Gemini Modelleri Tükenirse Fallback ────────────────────────────
   console.log("🔄 All Gemini models failed or hit quota. Falling back to Pollinations Keyed Tier...");
   const keyedPollinations = await generatePollinationsImage(prompt, true);
   if (keyedPollinations) return keyedPollinations;
@@ -141,30 +138,31 @@ export async function generateImage(prompt: string): Promise<string | null> {
   return await generatePollinationsImage(prompt, false);
 }
 
-/**
- * Helper to delay between sequential requests to avoid Rate Limits (429).
- */
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// ── YENİ: Paralel İşlem Havuzu (Chunking) YARDIMCISI ────────────────
+type Task = () => Promise<void>;
+
+async function processInChunks(tasks: Task[], chunkSize: number) {
+  for (let i = 0; i < tasks.length; i += chunkSize) {
+    const chunk = tasks.slice(i, i + chunkSize);
+    await Promise.all(chunk.map(task => task()));
+    await wait(200); // Havuzlar arası ufak bir nefes
+  }
+}
 
 /**
- * Generates images for all assets of a case in SEQUENTIAL order.
- * ── YENİ: Her evidence için sceneImageUrl de üretilir (sceneImagePrompt varsa).
- */
-/**
- * Generates images for all assets of a case in SEQUENTIAL order with progress reporting.
+ * Generates images for all assets of a case in PARALLEL order with progress reporting.
  */
 export async function generateCaseImages(
   caseData: Case,
   onProgress?: (percent: number) => void
 ): Promise<Case> {
-  console.log(`🖼️ Starting SEQUENTIAL image generation for case: "${caseData.title}"`);
+  console.log(`🖼️ Starting PARALLEL image generation for case: "${caseData.title}"`);
 
   const updated = { ...caseData };
   let currentStep = 0;
 
-  // Toplam beklenen görsel sayısını hesapla (Yaklaşık 25)
   const totalSteps =
-    1 + // Main
+    1 +
     (caseData.victim ? 1 : 0) +
     (caseData.characters?.length || 0) +
     (caseData.evidence?.reduce((acc, ev) => acc + (ev.sceneImagePrompt ? 2 : 1), 0) || 0) +
@@ -179,69 +177,71 @@ export async function generateCaseImages(
     }
   };
 
-  // 1. Main Case Image
+  // 1. TIER 1: Ana ve Kurban Görselleri (Sıralı - Oyuna hızlı giriş için)
   updated.generatedImageUrl = (await generateImage(caseData.imagePrompt)) || undefined;
   updateProgress();
-  await wait(500);
 
-  // 2. Victim
   if (caseData.victim?.imagePrompt) {
     const victimImg = await generateImage(caseData.victim.imagePrompt);
     if (victimImg && updated.victim) updated.victim.generatedImageUrl = victimImg;
     updateProgress();
-    await wait(500);
   }
 
-  // 3. Characters
+  // 2. TIER 2: Karakterler, Kanıtlar, Bölümler ve Bulmacalar (Paralel Havuz)
+  const backgroundTasks: Task[] = [];
+
   if (caseData.characters) {
-    for (let i = 0; i < caseData.characters.length; i++) {
-      const img = await generateImage(caseData.characters[i].imagePrompt);
-      updated.characters[i].generatedImageUrl = img || undefined;
-      updateProgress();
-      await wait(500);
-    }
+    caseData.characters.forEach((char, i) => {
+      backgroundTasks.push(async () => {
+        const img = await generateImage(char.imagePrompt);
+        updated.characters![i].generatedImageUrl = img || undefined;
+        updateProgress();
+      });
+    });
   }
 
-  // 4. Evidence — kanıt görseli + sahne görseli
   if (caseData.evidence) {
-    for (let i = 0; i < caseData.evidence.length; i++) {
-      // 4a. Kanıt objesi görseli (imagePrompt)
-      const evidenceImg = await generateImage(caseData.evidence[i].imagePrompt);
-      updated.evidence[i].generatedImageUrl = evidenceImg || undefined;
-      updateProgress();
-      await wait(500);
-
-      // 4b. Sahne görseli (sceneImagePrompt)
-      if (caseData.evidence[i].sceneImagePrompt) {
-        const sceneImg = await generateImage(caseData.evidence[i].sceneImagePrompt!);
-        updated.evidence[i].sceneImageUrl = sceneImg || undefined;
+    caseData.evidence.forEach((ev, i) => {
+      backgroundTasks.push(async () => {
+        const evidenceImg = await generateImage(ev.imagePrompt);
+        updated.evidence![i].generatedImageUrl = evidenceImg || undefined;
         updateProgress();
-        await wait(500);
+      });
+
+      if (ev.sceneImagePrompt) {
+        backgroundTasks.push(async () => {
+          const sceneImg = await generateImage(ev.sceneImagePrompt!);
+          updated.evidence![i].sceneImageUrl = sceneImg || undefined;
+          updateProgress();
+        });
       }
-    }
+    });
   }
 
-  // 5. Chapters
   if (caseData.chapters) {
-    for (let i = 0; i < caseData.chapters.length; i++) {
-      const img = await generateImage(caseData.chapters[i].imagePrompt);
-      updated.chapters[i].generatedImageUrl = img || undefined;
-      updateProgress();
-      await wait(500);
-    }
+    caseData.chapters.forEach((chapter, i) => {
+      backgroundTasks.push(async () => {
+        const img = await generateImage(chapter.imagePrompt);
+        updated.chapters![i].generatedImageUrl = img || undefined;
+        updateProgress();
+      });
+    });
   }
 
-  // 6. Puzzles
   if (caseData.puzzles) {
-    for (let i = 0; i < caseData.puzzles.length; i++) {
-      if (caseData.puzzles[i].imagePrompt) {
-        const img = await generateImage(caseData.puzzles[i].imagePrompt!);
-        updated.puzzles[i].generatedImageUrl = img || undefined;
-        updateProgress();
-        await wait(500);
+    caseData.puzzles.forEach((puzzle, i) => {
+      if (puzzle.imagePrompt) {
+        backgroundTasks.push(async () => {
+          const img = await generateImage(puzzle.imagePrompt!);
+          updated.puzzles![i].generatedImageUrl = img || undefined;
+          updateProgress();
+        });
       }
-    }
+    });
   }
+
+  console.log(`🚀 Processing ${backgroundTasks.length} secondary images in parallel chunks of 3...`);
+  await processInChunks(backgroundTasks, 3);
 
   if (onProgress) onProgress(100);
   console.log(`✅ All images for case "${caseData.title}" have been successfully generated.`);

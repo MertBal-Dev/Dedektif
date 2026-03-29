@@ -1078,9 +1078,9 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles }:
             {/* Interactive Scene Modal for searching */}
             <AnimatePresence>
               {activeInteractiveEvidence && (
-                <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-0 sm:p-4 backdrop-blur-sm">
+                <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-0 sm:p-4 backdrop-blur-sm overflow-y-auto">
                   <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-                    className="max-w-4xl w-full border-0 sm:border border-white/10 sm:rounded-2xl overflow-hidden shadow-2xl bg-black h-screen sm:h-auto">
+                    className="max-w-4xl w-full border-0 sm:border border-white/10 sm:rounded-2xl overflow-hidden shadow-2xl bg-black h-full sm:h-auto max-h-[100svh] sm:max-h-[85vh]">
                     <InteractiveScene
                       evidence={activeInteractiveEvidence}
                       onClose={() => { setActiveInteractiveEvidence(null); setSearching(null); }}
@@ -1188,10 +1188,10 @@ function EvidenceModal({ evidence, onClose, onImageClick }: {
     <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-md" onClick={onClose}>
       <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()}
-        className="max-w-2xl w-full bg-[#0a0a0a] border border-white/15 rounded-2xl overflow-hidden shadow-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar mx-2 sm:mx-4"
+        className="max-w-2xl w-full bg-[#0a0a0a] border border-white/15 rounded-2xl overflow-hidden shadow-2xl max-h-[98vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar mx-0 sm:mx-4"
       >
         {/* Interactive Scene Integration in Modal */}
-        <div className="border-b border-white/10">
+        <div className="border-b border-white/10 max-h-[40vh] sm:max-h-none overflow-hidden">
           <InteractiveScene evidence={evidence} />
         </div>
         <div className="relative h-48 sm:h-56 border-b border-white/10 bg-black cursor-zoom-in group"
@@ -1211,7 +1211,7 @@ function EvidenceModal({ evidence, onClose, onImageClick }: {
             <ScanSearch size={10} /> Tam Ekran
           </div>
         </div>
-        <div className="p-7 space-y-5">
+        <div className="p-5 sm:p-7 space-y-4 sm:space-y-5">
           <div>
             <h3 className="text-2xl font-serif text-white mb-1">{evidence.title}</h3>
             <div className="flex items-center gap-3 text-[10px] text-gray-400 font-mono">
@@ -1317,7 +1317,7 @@ function PuzzleCard({ puzzle, isSolved, onSolve, onHint, onImageClick, linkedEvi
         // Başarı mesajı artık ekranda kalıcı kalır
       } else {
         setStatus('wrong');
-        setTimeout(() => { setStatus('idle'); setAiFeedback(null); }, 10000);
+        // İpucu/Geri bildirim artık otomatik silinmez, kullanıcı tekrar deneyene kadar kalır
       }
     } catch { setIsEvaluating(false); }
     finally { setIsEvaluating(false); }
@@ -1745,7 +1745,12 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
                           text={msg.message}
                           speed={16}
                           charInterval={6}
-                          onCharacter={() => play('click')}
+                          onCharacter={() => {
+                            play('click');
+                            if (scrollRef.current) {
+                              scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                            }
+                          }}
                         />
                       ) : (
                         msg.message
@@ -1809,15 +1814,15 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
           )}
 
           {/* Input Unit */}
-          <div className="p-3 sm:p-5 md:p-6 border-t border-white/5 bg-[#050505]">
-            <form onSubmit={handleSubmit} className="relative max-w-3xl mx-auto flex gap-4 w-full">
+          <div className="p-3 sm:p-5 md:p-6 border-t border-white/5 bg-[#050505] safe-area-bottom">
+            <form onSubmit={handleSubmit} className="relative max-w-3xl mx-auto flex gap-2 sm:gap-4 w-full">
               <div className="flex-1 relative">
                 <input
                   ref={inputRef}
                   value={question}
                   onChange={e => setQuestion(e.target.value)}
-                  placeholder={`${character.name} adlı şüpheliyi sorgula...`}
-                  className="w-full bg-[#111111] border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-6 py-4 sm:py-5 text-white text-[16px] placeholder:text-gray-700 focus:outline-none focus:border-red-900/50 transition-all shadow-inner font-serif"
+                  placeholder={`${character.name} sorgulanıyor...`}
+                  className="w-full bg-[#111111] border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-6 py-3.5 sm:py-5 text-white text-[16px] placeholder:text-gray-700 focus:outline-none focus:border-red-900/50 transition-all shadow-inner font-serif"
                 />
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
                   <kbd className="hidden sm:inline-block px-2 py-0.5 rounded text-[8px] bg-white/5 border border-white/10 text-gray-600 font-bold uppercase tracking-widest">Enter</kbd>
@@ -1884,13 +1889,13 @@ function DeductionModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ type: 'spring', damping: 22 }}
-        className="max-w-2xl w-full bg-[#0d0a05] border border-accent/30 rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.08)] relative max-h-[95vh] overflow-y-auto custom-scrollbar"
+        className="max-w-2xl w-full bg-[#0d0a05] border border-accent/30 rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.08)] relative max-h-[98vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar"
       >
         {/* Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-60 h-24 bg-accent/10 blur-[60px] rounded-full pointer-events-none" />
 
         {/* Header */}
-        <div className="p-8 border-b border-white/5 flex items-center justify-between relative z-10">
+        <div className="p-5 sm:p-8 border-b border-white/5 flex items-center justify-between relative z-10">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-full bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
               <Gavel size={22} strokeWidth={1.5} />
@@ -1909,7 +1914,7 @@ function DeductionModal({
         </div>
 
         {/* Suspect */}
-        <div className="px-8 pt-6 pb-4 relative z-10">
+        <div className="px-5 sm:px-8 pt-5 sm:pt-6 pb-4 relative z-10">
           <p className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-3">İtham Edilen Şüpheli</p>
           <div className="flex items-center gap-4 bg-black/40 border border-primary/20 rounded-xl p-4">
             <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-primary/40 flex-shrink-0 bg-black/60">
@@ -1933,7 +1938,7 @@ function DeductionModal({
         </div>
 
         {/* Evidence selection */}
-        <div className="px-8 pb-6 relative z-10">
+        <div className="px-5 sm:px-8 pb-6 relative z-10">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">
               Kanıt Seç <span className="text-accent">({selectedEvidence.length}/3)</span>
@@ -1966,7 +1971,7 @@ function DeductionModal({
               Henüz hiç kanıt toplanmadı. Önce kanıt araştırın.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-2 p-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 max-h-[380px] sm:max-h-[420px] overflow-y-auto custom-scrollbar pr-2 p-1">
               {foundEvidence.map((ev) => {
                 const isSelected = selectedEvidence.includes(ev.id);
                 return (
@@ -2049,7 +2054,7 @@ function DeductionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-8 pb-8 relative z-10">
+        <div className="px-5 sm:px-8 pb-6 sm:pb-8 relative z-10">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
@@ -2184,7 +2189,7 @@ function ConfrontationOverlay({
         exit={{ scale: 0.93, opacity: 0, y: -20 }}
         transition={{ type: 'spring', damping: 20, stiffness: 200, delay: 0.15 }}
         className={cn(
-          'relative z-10 w-full max-w-2xl rounded-3xl overflow-hidden border shadow-2xl mx-auto max-h-[90vh] overflow-y-auto custom-scrollbar',
+          'relative z-10 w-full max-w-2xl rounded-2xl sm:rounded-3xl overflow-hidden border shadow-2xl mx-auto max-h-[98vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar',
           isCorrect
             ? 'border-green-500/30 shadow-[0_0_100px_rgba(34,197,94,0.12)]'
             : 'border-red-900/50 shadow-[0_0_100px_rgba(139,0,0,0.2)]'
@@ -2248,7 +2253,7 @@ function ConfrontationOverlay({
         )}
 
         {/* İçerik */}
-        <div className="bg-[#080808] p-5 sm:p-8 space-y-5 sm:space-y-6">
+        <div className="bg-[#080808] p-4 sm:p-8 space-y-4 sm:space-y-6">
           {/* Başlık */}
           <motion.div
             initial={{ opacity: 0, x: -15 }}
@@ -2365,7 +2370,7 @@ function CaseSummaryModal({ resolution, onClose }: {
         className="max-w-4xl w-full bg-[#0a0d0a] border border-green-900/50 rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_0_120px_rgba(34,197,94,0.1)] flex flex-col md:flex-row max-h-[95vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar mx-2 sm:mx-4"
       >
         {/* Killer reveal */}
-        <div className="w-full md:w-5/12 bg-black border-r border-green-900/30 relative min-h-[240px] sm:min-h-[300px]">
+        <div className="w-full md:w-5/12 bg-black border-b md:border-b-0 md:border-r border-green-900/30 relative h-[35vh] md:h-auto min-h-[240px]">
           <CaseImage src={resolution.killer.generatedImageUrl} alt={resolution.killer.name}
             fallbackSeed={resolution.killer.name} className="w-full h-full absolute inset-0" contain={true} />
           <div className="absolute inset-0 bg-gradient-to-t from-[#050805] via-[#050805]/50 to-transparent" />

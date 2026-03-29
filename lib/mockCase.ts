@@ -13,7 +13,7 @@ export const MOCK_CASE: Case = {
   difficultyRating: 3,
   imagePrompt: "1950s noir detective scene, a grand hotel suite with velvet curtains and a body on the floor, cinematic lighting",
   generatedImageUrl: "https://images.unsplash.com/photo-1549490349-8643362247b5?q=80&w=1000&auto=format&fit=crop",
-  
+
   victim: {
     name: "Selim Aksoy",
     age: 62,
@@ -21,7 +21,7 @@ export const MOCK_CASE: Case = {
     description: "Zengin, otoriter ve titiz bir iş adamı.",
     imagePrompt: "Portrait of an elderly dignified businessman in a 1950s suit, black and white noir style",
   },
-  
+
   characters: [
     {
       id: "char-1",
@@ -56,7 +56,7 @@ export const MOCK_CASE: Case = {
       generatedImageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=1000&auto=format&fit=crop"
     }
   ],
-  
+
   evidence: [
     {
       id: "ev-1",
@@ -103,7 +103,7 @@ export const MOCK_CASE: Case = {
       isFound: false,
       location: "Mutfak Hattı",
       locationDescription: "Eski bir mutfak dolabının en alt rafında, örtülerin altına gizlenmiş.",
-      clueText: "Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.",
+      clueText: "Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.Günlükte Selim Bey'in yeğeni Can ile yaptığı şiddetli bir tartışmadan bahsediliyor.",
       interactiveObjects: [
         {
           id: "obj-3",
@@ -119,7 +119,7 @@ export const MOCK_CASE: Case = {
       sceneImageUrl: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?q=80&w=1000&auto=format&fit=crop"
     }
   ],
-  
+
   puzzles: [
     {
       id: "puzzle-1",
@@ -136,7 +136,7 @@ export const MOCK_CASE: Case = {
       generatedImageUrl: "https://images.unsplash.com/photo-1582139329536-e7284fece509?q=80&w=1000&auto=format&fit=crop"
     }
   ],
-  
+
   chapters: [
     {
       id: "chap-1",
