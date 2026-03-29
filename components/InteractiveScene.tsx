@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Evidence, InteractiveObject } from '@/types/game';
 import { useGame } from '@/features/useGame';
-import { Loader2, Eye, Sparkles, X, ScanSearch } from 'lucide-react';
+import { Loader2, Eye, Sparkles, X, ScanSearch, Quote } from 'lucide-react';
 
 // ─── useSound (GameView ile aynı motor — sıfır dosya bağımlılığı) ─────────────
 type SoundKey = 'click' | 'discover' | 'success';
@@ -74,7 +74,7 @@ function EvidenceZoomOverlay({ evidence, onClose }: { evidence: Evidence; onClos
         initial={{ opacity: 0, scale: 0.8, y: 40, rotate: -2 }}
         animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
         exit={{ opacity: 0, scale: 0.8, y: 40, rotate: 2 }}
-        className="relative max-w-4xl w-full aspect-[4/5] md:aspect-video bg-[#0f0e0c] rounded-2xl overflow-hidden shadow-[0_32px_64px_rgba(0,0,0,0.8)] border border-white/10 flex flex-col md:flex-row h-full max-h-[90vh]"
+        className="relative max-w-4xl xl:max-w-6xl w-full aspect-[4/5] md:aspect-video bg-[#0f0e0c] rounded-2xl overflow-hidden shadow-[0_32px_64px_rgba(0,0,0,0.8)] border border-white/10 flex flex-col md:flex-row h-full max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
@@ -154,85 +154,113 @@ interface RevealPopupProps {
 // ─── Reveal Popup ─────────────────────────────────────────────────────────────
 function RevealPopup({ object, onClose }: RevealPopupProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.85, y: 8 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.9, y: 4 }}
-      transition={{ type: 'spring', damping: 22, stiffness: 300 }}
-      className="absolute z-50 w-48 sm:w-64 pointer-events-auto"
-      style={{
-        // Popup'u ekrandan taşmayacak şekilde konumlandır
-        left: object.x > 80 ? 'auto' : object.x < 20 ? '0' : '50%',
-        right: object.x > 80 ? '0' : 'auto',
-        transform: (object.x > 80 || object.x < 20) ? 'none' : 'translateX(-50%)',
-        bottom: object.y > 50 ? 'calc(100% + 12px)' : 'auto',
-        top: object.y <= 50 ? 'calc(100% + 12px)' : 'auto',
-      }}
-    >
-      <div className="bg-[#0d0b08]/95 border border-amber-900/60 rounded-xl shadow-[0_12px_48px_rgba(0,0,0,0.9)] overflow-hidden backdrop-blur-md">
-        {/* Başlık */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-amber-900/30 bg-amber-950/40">
-          <div className="flex items-center gap-2">
-            <span className="text-base">{object.icon}</span>
-            <span className="text-[11px] font-bold uppercase tracking-widest text-amber-400">
-              {object.label}
-            </span>
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/90 z-[400] backdrop-blur-md pointer-events-auto"
+        onClick={onClose}
+      />
+      
+      {/* Modal Content */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="fixed inset-0 z-[401] flex items-center justify-center p-4 sm:p-6 pointer-events-none"
+      >
+        <div className="bg-[#0d0b08] border border-amber-900/40 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] overflow-hidden w-full max-w-lg pointer-events-auto flex flex-col">
+          <div className="relative">
+             {/* Decorative background icon */}
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[180px] opacity-[0.02] pointer-events-none select-none">
+              {object.icon}
+            </div>
+
+            {/* Header */}
+            <div className="relative flex items-center justify-between px-6 sm:px-8 pt-6 sm:pt-8 pb-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-3xl">
+                  {object.icon}
+                </div>
+                <div>
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500/70 leading-none mb-1.5">Bulgu Analizi</h4>
+                  <p className="text-lg sm:text-xl font-serif text-white leading-none tracking-tight">{object.label}</p>
+                </div>
+              </div>
+              <button 
+                onClick={onClose}
+                className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full text-gray-500 hover:text-white transition-all border border-white/5"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content Area */}
+            <div className="relative px-6 sm:px-10 py-8 sm:py-12 border-y border-white/[0.03]">
+              <div className="relative">
+                <Quote className="absolute -top-6 -left-4 text-amber-500/10 w-12 h-12" />
+                <p className="text-[18px] sm:text-[20px] text-gray-200 font-serif italic leading-[1.7] relative z-10 text-center sm:text-left">
+                  {object.revealText}
+                </p>
+                <div className="flex justify-end mt-2 opacity-10">
+                   <Quote className="w-8 h-8 rotate-180" />
+                </div>
+              </div>
+              
+              {object.linkedEvidenceId && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.35 }}
+                  className="mt-8 flex items-center gap-4 px-5 py-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl"
+                >
+                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-amber-500/60 font-black uppercase tracking-[0.2em] mb-0.5">Sistem Güncellemesi</span>
+                    <span className="text-[11px] text-amber-400 font-bold uppercase tracking-[0.1em]">Envantere yeni kanıt eklendi</span>
+                  </div>
+                  <Sparkles size={18} className="text-amber-500/40 ml-auto" />
+                </motion.div>
+              )}
+            </div>
+
+            {/* Action Footer */}
+            <div className="p-6 sm:p-8 bg-[#0a0907]">
+              <button
+                onClick={onClose}
+                className="w-full py-5 bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/30 text-amber-500 text-[11px] font-black uppercase tracking-[0.5em] rounded-xl transition-all shadow-[0_0_30px_rgba(212,175,55,0.05)] active:scale-[0.98]"
+              >
+                İncelemeyi Kapat
+              </button>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-300 transition-colors p-0.5"
-          >
-            <X size={13} />
-          </button>
         </div>
-
-        {/* İçerik */}
-        <div className="p-3.5">
-          <p className="text-[14px] text-white font-serif italic leading-relaxed text-shadow-sm">
-            {object.revealText}
-          </p>
-
-          {/* Kanıt bulundu bildirimi */}
-          {object.linkedEvidenceId && (
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="mt-2.5 flex items-center gap-1.5 text-[10px] text-amber-400 font-bold uppercase tracking-widest"
-            >
-              <Sparkles size={10} />
-              Kanıt Bulundu!
-            </motion.div>
-          )}
-        </div>
-      </div>
-    </motion.div>
+      </motion.div>
+    </>
   );
 }
 
 // ─── Hotspot Noktası ──────────────────────────────────────────────────────────
 function HotspotPoint({
   object,
-  evidenceId,
   isRevealed,
   onReveal,
+  onOpen,
 }: {
   object: InteractiveObject;
-  evidenceId: string;
   isRevealed: boolean;
   onReveal: (obj: InteractiveObject) => void;
+  onOpen: (obj: InteractiveObject) => void;
 }) {
-  const [showPopup, setShowPopup] = useState(false);
-  const [isBlocked, setIsBlocked] = useState(false);
-
   const handleClick = useCallback(() => {
     if (!isRevealed) {
       onReveal(object);
-      // blocked durumunu parent'tan alınamadığı için popup'u her durumda aç;
-      // parent blockMessage state'i ile ayrı overlay gösteriyor
     }
-    setShowPopup(prev => !prev);
-  }, [isRevealed, object, onReveal]);
+    onOpen(object);
+  }, [isRevealed, object, onReveal, onOpen]);
 
   return (
     <div
@@ -293,16 +321,6 @@ function HotspotPoint({
           {object.icon} {object.label}
         </motion.div>
       </button>
-
-      {/* Reveal popup */}
-      <AnimatePresence>
-        {showPopup && (
-          <RevealPopup
-            object={object}
-            onClose={() => setShowPopup(false)}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -314,6 +332,7 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
   const [imageError, setImageError] = useState(false);
   const [scanMode, setScanMode] = useState(true);
   const [zoomedEvidence, setZoomedEvidence] = useState<Evidence | null>(null);
+  const [activeObject, setActiveObject] = useState<InteractiveObject | null>(null);
 
   // Görseli belirle
   const sceneImage = sceneEvidence.sceneImageUrl || sceneEvidence.generatedImageUrl;
@@ -399,8 +418,8 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
         )}
       </div>
 
-      {/* Sahne görseli */}
-      <div className="relative w-full" style={{ paddingBottom: '56.25%' /* 16:9 */ }}>
+      {/* Sahne görseli — Mobilde daha dikey (4:5), masaüstünde 16:9 — Max-h ile masaüstünde kontrol altında tutuyoruz */}
+      <div className="relative w-full overflow-hidden aspect-[4/5] sm:aspect-video sm:max-h-[600px] xl:max-h-[700px]">
         {/* Yükleniyor */}
         {!imageLoaded && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a]">
@@ -446,9 +465,9 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
             >
               <HotspotPoint
                 object={obj}
-                evidenceId={sceneEvidence.id}
                 isRevealed={isObjectRevealed(sceneEvidence.id, obj.id)}
                 onReveal={handleReveal}
+                onOpen={(o) => setActiveObject(o)}
               />
             </motion.div>
           ))}
@@ -461,7 +480,8 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full px-4"
+              className="absolute left-1/2 -translate-x-1/2 z-50 max-w-sm w-full px-4"
+              style={{ bottom: `calc(1rem + env(safe-area-inset-bottom, 0px))` }}
             >
               <div className="bg-[#1a0d00]/95 border border-amber-800/50 rounded-xl px-5 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] backdrop-blur-md flex items-start gap-3">
                 <span className="text-xl flex-shrink-0 mt-0.5">🔒</span>
@@ -477,6 +497,16 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
             <EvidenceZoomOverlay
               evidence={zoomedEvidence}
               onClose={() => setZoomedEvidence(null)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Reveal Popup — Lifted state for global positioning */}
+        <AnimatePresence>
+          {activeObject && (
+            <RevealPopup
+              object={activeObject}
+              onClose={() => setActiveObject(null)}
             />
           )}
         </AnimatePresence>

@@ -42,3 +42,6 @@ next-env.d.ts
 
 # secrets
 /secrets
+
+# gcp key
+gcp-key.json

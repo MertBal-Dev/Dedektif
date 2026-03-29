@@ -1,79 +1,64 @@
 import { Case } from "@/types/game";
+import { VertexAI } from "@google-cloud/vertexai";
+
+const vertexAI = new VertexAI({
+  project: process.env.GCP_PROJECT_ID || "",
+  location: process.env.GCP_LOCATION || "us-central1"
+});
 
 /**
  * Generates an image using Gemini's Imagen or Multimodal (Banana) models.
  * Supports both :predict (Imagen) and :generateContent (Gemini-Multimodal) endpoints.
  * Returns a base64 Data URL.
  */
+/**
+ * Generates an image using Gemini's Vertex AI models.
+ * Returns a base64 Data URL or null.
+ */
 async function generateGeminiImage(prompt: string, modelId: string): Promise<string | null> {
-  const apiKey = process.env.GEMINI_KEY;
-  if (!apiKey) {
-    console.warn("⚠️ GEMINI_KEY bulunamadı, Imagen kullanılamıyor.");
-    return null;
-  }
-
-  // Model tipini ve metodunu belirle
   const isMultimodal = modelId.includes("gemini") || modelId.includes("banana");
-  const method = isMultimodal ? "generateContent" : "predict";
-  const url = `https://generativelanguage.googleapis.com/v1beta/${modelId}:${method}?key=${apiKey}`;
+  const model = vertexAI.getGenerativeModel({ model: modelId });
 
-  let body: any;
-  if (method === "predict") {
-    // --- IMAGEN (PREDICT) FORMATI ---
-    body = {
-      instances: [{
-        prompt: `${prompt}, hyper-realistic photography, 8k resolution, cinematic lighting, natural skin textures, 35mm lens, film noir atmosphere, detailed facial features`
-      }],
-      parameters: {
+  try {
+    if (isMultimodal) {
+      const result = await model.generateContent({
+        contents: [{
+          role: 'user',
+          parts: [{
+            text: `Generate a high-quality, professional image: ${prompt}, hyper-realistic photography, cinematic lighting, film noir atmosphere.`
+          }]
+        }],
+        generationConfig: {
+          candidateCount: 1,
+        }
+      });
+
+      const part = result.response.candidates?.[0]?.content?.parts?.[0];
+      if (part?.inlineData?.data) {
+        console.log(`🎨 Generated image via Vertex AI Multimodal (${modelId})`);
+        return `data:${part.inlineData.mimeType || 'image/webp'};base64,${part.inlineData.data}`;
+      }
+    } else {
+      const enhancedPrompt = `${prompt}, hyper-realistic photography, 8k resolution, cinematic lighting, natural skin textures, 35mm lens, film noir atmosphere, detailed facial features`;
+      
+      const instances = [{ prompt: enhancedPrompt }];
+      const parameters = {
         sampleCount: 1,
         aspectRatio: "16:9",
         outputMimeType: "image/webp"
-      }
-    };
-  } else {
-    // --- GEMINI MULTIMODAL (GENERATECONTENT) FORMATI ---
-    body = {
-      contents: [{
-        parts: [{
-          text: `Generate a high-quality, professional image: ${prompt}, hyper-realistic photography, cinematic lighting, film noir atmosphere.`
-        }]
-      }],
-      generationConfig: {
-        candidateCount: 1,
-      }
-    };
-  }
+      };
 
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.warn(`⚠️ Gemini ${modelId} failed (${response.status}):`, JSON.stringify(errorData));
-      return null;
-    }
-
-    const data = await response.json();
-
-    // --- RESPONS PARSING ---
-    if (method === "predict") {
-      if (data.predictions?.[0]?.bytesBase64Encoded) {
-        console.log(`🎨 Generated image via Gemini Imagen (${modelId})`);
-        return `data:image/webp;base64,${data.predictions[0].bytesBase64Encoded}`;
-      }
-    } else {
-      const part = data.candidates?.[0]?.content?.parts?.[0];
-      if (part?.inlineData?.data) {
-        console.log(`🎨 Generated image via Gemini Multimodal (${modelId})`);
-        return `data:${part.inlineData.mimeType || 'image/webp'};base64,${part.inlineData.data}`;
+      // @ts-ignore
+      const result = await model.predict({ instances, parameters });
+      
+      const predictions = result.predictions as any[];
+      if (predictions?.[0]?.bytesBase64Encoded) {
+        console.log(`🎨 Generated image via Vertex AI Imagen (${modelId})`);
+        return `data:image/webp;base64,${predictions[0].bytesBase64Encoded}`;
       }
     }
   } catch (error) {
-    console.error(`❌ Gemini Image generation (${modelId}) failed:`, error);
+    console.error(`❌ Vertex AI Image generation (${modelId}) failed:`, error);
   }
   return null;
 }

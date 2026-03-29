@@ -1,14 +1,18 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { VertexAI } from "@google-cloud/vertexai";
 import { Case, Character } from "@/types/game";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY || "");
+// Initialize Vertex AI
+const vertexAI = new VertexAI({
+  project: process.env.GCP_PROJECT_ID || "",
+  location: process.env.GCP_LOCATION || "us-central1"
+});
 
-// Text generation models
+// Text generation models (2026 current versions)
 const MODEL_NAME = "gemini-2.5-flash";           // Vaka üretimi (kalite öncelikli)
 const MODEL_LITE_NAME = "gemini-2.5-flash-lite"; // Bulmaca & Sorgulama (hız öncelikli)
 
-const textModel = genAI.getGenerativeModel({ model: MODEL_NAME });   // Sadece generateNewCase kullanır
-const liteModel = genAI.getGenerativeModel({ model: MODEL_LITE_NAME }); // İlk tercih: bulmaca & sorgulama
+const textModel = vertexAI.getGenerativeModel({ model: MODEL_NAME });   // Sadece generateNewCase kullanır
+const liteModel = vertexAI.getGenerativeModel({ model: MODEL_LITE_NAME }); // İlk tercih: bulmaca & sorgulama
 
 const CASE_SYSTEM_PROMPT = `
 Sen dünya klasmanında bir polisiye hikaye yazarı ve oyun tasarımcısısın. Agatha Christie ve Raymond Chandler'ın ustalığını taşıyan, derin psikolojik karakterler ve zekice bulmacalar yaratan bir ustasın.
@@ -401,12 +405,16 @@ OLAY YERİ KONTROL LİSTESİ (Her evidence için uygula):
   try {
     let responseText;
     try {
-      const result = await textModel.generateContent([CASE_SYSTEM_PROMPT, prompt]);
-      responseText = result.response.text();
+      const result = await textModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: CASE_SYSTEM_PROMPT }, { text: prompt }] }]
+      });
+      responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } catch (e) {
       console.warn("Primary model failed, retrying with Lite model...", e);
-      const result = await liteModel.generateContent([CASE_SYSTEM_PROMPT, prompt]);
-      responseText = result.response.text();
+      const result = await liteModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: CASE_SYSTEM_PROMPT }, { text: prompt }] }]
+      });
+      responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
     const cleanText = responseText
@@ -520,9 +528,9 @@ DAVRANIŞLAR:
 `;
 
   try {
-    const chatModel = genAI.getGenerativeModel({
+    const chatModel = vertexAI.getGenerativeModel({
       model: MODEL_NAME,
-      systemInstruction: systemPrompt
+      systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] }
     });
 
     const chat = chatModel.startChat({
@@ -533,12 +541,12 @@ DAVRANIŞLAR:
     });
 
     const result = await chat.sendMessage(question);
-    return result.response.text();
+    return result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
   } catch (e) {
     console.warn("Interrogation primary model failed, retrying with Lite...", e);
-    const chatModel = genAI.getGenerativeModel({
+    const chatModel = vertexAI.getGenerativeModel({
       model: MODEL_LITE_NAME,
-      systemInstruction: systemPrompt
+      systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] }
     });
 
     const chat = chatModel.startChat({
@@ -549,7 +557,7 @@ DAVRANIŞLAR:
     });
 
     const result = await chat.sendMessage(question);
-    return result.response.text();
+    return result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
   }
 }
 
@@ -591,12 +599,16 @@ DEĞERLENDİRME KRİTERLERİ:
   try {
     let responseText;
     try {
-      const result = await liteModel.generateContent(systemPrompt);
-      responseText = result.response.text();
+      const result = await liteModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
+      });
+      responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } catch (e) {
       console.warn("Puzzle evaluation lite model failed, retrying with Flash...", e);
-      const result = await textModel.generateContent(systemPrompt);
-      responseText = result.response.text();
+      const result = await textModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
+      });
+      responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
     const text = responseText
@@ -673,12 +685,16 @@ DEĞERLENDİRME KURALLARI:
   try {
     let responseText;
     try {
-      const result = await textModel.generateContent(systemPrompt);
-      responseText = result.response.text();
+      const result = await textModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
+      });
+      responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } catch (e) {
       console.warn("Accusation assessment primary model failed, retrying with Lite...", e);
-      const result = await liteModel.generateContent(systemPrompt);
-      responseText = result.response.text();
+      const result = await liteModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
+      });
+      responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
     const text = responseText

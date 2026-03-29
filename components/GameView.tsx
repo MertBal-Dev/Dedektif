@@ -1738,11 +1738,10 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
   const [isTyping, setIsTyping] = useState(false);
   const [localHistory, setLocalHistory] = useState(history);
   const [error, setError] = useState<string | null>(null);
-  // Typewriter için: son model mesajının index'ini takip et
   const [typewriterIndex, setTypewriterIndex] = useState<number>(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { play } = useSound(); // Plan Madde 4
+  const { play } = useSound();
 
   useEffect(() => { setLocalHistory(history); }, [history.length]);
 
@@ -1787,9 +1786,20 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
+  // Mobile: karakter bilgi panelini aç/kapat
+  const [showMobileInfo, setShowMobileInfo] = useState(false);
+
+  const characterInfoItems = [
+    { label: 'Meslek', val: character.profession, icon: <Briefcase size={12} /> },
+    { label: 'Yaş', val: `${character.age}`, icon: <User size={12} /> },
+    { label: 'Adres', val: character.address, icon: <MapPin size={12} /> },
+    { label: 'İlişki', val: character.relationToVictim, icon: <Link size={12} /> },
+    { label: 'İfadesi (Alibi)', val: character.alibi || 'Belirtilmemiş', italic: true, icon: <Clock size={12} /> },
+  ];
+
   return (
-    <div className="fixed inset-0 bg-black/98 z-[110] flex items-center justify-center p-3 md:p-6 backdrop-blur-xl">
-      {/* Film Grain Effect Overlay */}
+    <div className="fixed inset-0 bg-black/98 z-[200] flex items-stretch justify-center backdrop-blur-xl">
+      {/* Film Grain */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-overlay z-0"
         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }} />
 
@@ -1797,91 +1807,167 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
         initial={{ y: 30, opacity: 0, scale: 0.98 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 20, opacity: 0, scale: 0.98 }}
-        className="max-w-6xl w-full h-screen sm:h-[93vh] bg-[#050505] border-0 sm:border border-white/10 sm:rounded-3xl flex flex-col md:flex-row shadow-[0_0_100px_rgba(0,0,0,0.8)] relative z-10 overflow-hidden"
+        className="w-full max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] bg-[#050505] md:border md:border-white/10 md:rounded-3xl md:my-8 xl:my-10 2xl:my-12 flex flex-col md:flex-row shadow-[0_0_100px_rgba(0,0,0,0.8)] relative z-10 overflow-hidden"
       >
-        {/* Close Button */}
-        <button onClick={onClose} className="absolute top-3 right-3 sm:top-5 sm:right-5 p-2.5 bg-black/60 hover:bg-black/90 rounded-full text-white/60 hover:text-white z-50 transition-all border border-white/10">
-          <X size={20} />
-        </button>
 
-        {/* Sidebar */}
-        <div className="hidden md:flex w-[280px] lg:w-[320px] bg-[#080808] border-r border-white/5 p-6 lg:p-8 flex-col shrink-0">
-          <div className="space-y-6 flex-1">
-            <div className="relative group cursor-zoom-in shrink-0" onClick={() => character.generatedImageUrl && onImageClick(character.generatedImageUrl, character.name)}>
-              <div className="w-full aspect-[4/5] rounded-xl overflow-hidden border border-white/10 bg-black shadow-2xl relative">
-                <CaseImage src={character.generatedImageUrl} alt={character.name} fallbackSeed={character.name} className="w-full h-full" contain={true} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                <div className="absolute bottom-4 left-0 right-0 text-center px-4">
-                  <h3 className="text-xl font-serif text-white drop-shadow-lg">{character.name}</h3>
-                  <p className="text-[10px] text-accent/80 uppercase font-bold tracking-wider mt-1">{character.role}</p>
-                </div>
-                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 bg-black/60 p-1.5 rounded-full border border-white/10 transition-opacity">
-                  <ScanSearch size={12} className="text-white/70" />
-                </div>
+        {/* ── DESKTOP SIDEBAR ─────────────────────────────────────────── */}
+        <div className="hidden md:flex w-[250px] lg:w-[280px] xl:w-[320px] 2xl:w-[360px] bg-[#080808] border-r border-white/5 flex-col shrink-0 overflow-y-auto">
+          {/* Karakter görseli */}
+          <div
+            className="relative group cursor-zoom-in shrink-0 mx-4 lg:mx-6 mt-6 lg:mt-8"
+            onClick={() => character.generatedImageUrl && onImageClick(character.generatedImageUrl, character.name)}
+          >
+            <div className="w-full aspect-[4/5] rounded-xl overflow-hidden border border-white/10 bg-black shadow-2xl relative">
+              <CaseImage src={character.generatedImageUrl} alt={character.name} fallbackSeed={character.name} className="w-full h-full" contain={true} />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+              <div className="absolute bottom-4 left-0 right-0 text-center px-4">
+                <h3 className="text-lg xl:text-xl font-serif text-white drop-shadow-lg">{character.name}</h3>
+                <p className="text-[10px] text-accent/80 uppercase font-bold tracking-wider mt-1">{character.role}</p>
               </div>
-            </div>
-
-            <div className="space-y-2 text-[10px]">
-              {[
-                { label: 'Meslek', val: character.profession, icon: <Briefcase size={12} /> },
-                { label: 'Yaş', val: `${character.age}`, icon: <User size={12} /> },
-                { label: 'Adres', val: character.address, icon: <MapPin size={12} /> },
-                { label: 'İlişki', val: character.relationToVictim, icon: <Link size={12} /> },
-                { label: 'İfadesi (Alibi)', val: character.alibi || 'Belirtilmemiş', italic: true, icon: <Clock size={12} /> },
-              ].map(item => (
-                <div key={item.label} className="p-3 bg-white/[0.02] border border-white/[0.03] rounded-lg">
-                  <div className="flex items-center gap-2 text-[8px] text-gray-500 font-black uppercase tracking-widest mb-1.5">
-                    {item.icon} {item.label}
-                  </div>
-                  <p className={cn("text-[11px] leading-relaxed break-words", item.italic ? 'text-amber-600/60 italic font-serif' : 'text-gray-400 font-mono')}>
-                    {item.val}
-                  </p>
-                </div>
-              ))}
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 bg-black/60 p-1.5 rounded-full border border-white/10 transition-opacity">
+                <ScanSearch size={12} className="text-white/70" />
+              </div>
             </div>
           </div>
 
+          {/* Detaylar */}
+          <div className="flex-1 px-4 lg:px-6 py-4 space-y-2">
+            {characterInfoItems.map(item => (
+              <div key={item.label} className="p-3 bg-white/[0.02] border border-white/[0.03] rounded-lg">
+                <div className="flex items-center gap-2 text-[8px] text-gray-500 font-black uppercase tracking-widest mb-1.5">
+                  {item.icon} {item.label}
+                </div>
+                <p className={cn("text-[11px] leading-relaxed break-words", item.italic ? 'text-amber-600/60 italic font-serif' : 'text-gray-400 font-mono')}>
+                  {item.val}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* İtham Et butonu — sidebar altına yapışık */}
+          <div className="px-4 lg:px-6 pb-6 lg:pb-8 pt-4 border-t border-white/5 mt-2">
+            <button
+              onClick={() => onAccuse(character.id)}
+              className="w-full py-4 bg-primary/5 hover:bg-primary/90 border border-primary/20 hover:border-red-600 text-primary hover:text-white font-black uppercase tracking-[0.3em] xl:tracking-[0.4em] text-[9px] xl:text-[10px] transition-all rounded-xl flex items-center justify-center gap-3 shadow-lg group"
+            >
+              <Gavel size={15} className="group-hover:rotate-[-20deg] transition-transform shrink-0" />
+              Vakayı Bitir: İtham Et
+            </button>
+          </div>
+        </div>
+
+        {/* ── MOBILE TOP BAR ──────────────────────────────────────────── */}
+        <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-[#080808] border-b border-white/5 shrink-0">
+          {/* Küçük avatar */}
+          <div
+            className="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-black shrink-0 cursor-pointer"
+            onClick={() => character.generatedImageUrl && onImageClick(character.generatedImageUrl, character.name)}
+          >
+            <CaseImage src={character.generatedImageUrl} alt={character.name} fallbackSeed={character.name} className="w-full h-full" contain={true} />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-serif text-sm truncate">{character.name}</p>
+            <p className="text-[10px] text-accent/70 uppercase tracking-wider truncate">{character.role}</p>
+          </div>
+
+          {/* Bilgi aç/kapat */}
+          <button
+            onClick={() => setShowMobileInfo(v => !v)}
+            className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-all shrink-0"
+            title="Karakter bilgileri"
+          >
+            <Info size={16} />
+          </button>
+
+          {/* İtham Et — mobile top bar */}
           <button
             onClick={() => onAccuse(character.id)}
-            className="mt-8 w-full py-4 bg-primary/5 hover:bg-primary/90 border border-primary/20 hover:border-red-600 text-primary hover:text-white font-black uppercase tracking-[0.4em] text-[10px] transition-all rounded-xl flex items-center justify-center gap-3 shadow-lg group"
+            className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 hover:bg-primary/80 border border-primary/30 hover:border-red-600 text-primary hover:text-white text-[9px] font-black uppercase tracking-wider rounded-lg transition-all shrink-0"
           >
-            <Gavel size={16} className="group-hover:rotate-[-20deg] transition-transform" />
-            Vakayı Bitir: İtham Et
+            <Gavel size={13} />
+            İtham Et
+          </button>
+
+          {/* Kapat */}
+          <button
+            onClick={onClose}
+            className="p-2 bg-black/60 hover:bg-black/90 rounded-full text-white/60 hover:text-white transition-all border border-white/10 shrink-0"
+          >
+            <X size={18} />
           </button>
         </div>
 
-        {/* Interrogation Interface */}
-        <div className="flex-1 flex flex-col bg-[#070707] relative min-w-0">
-          <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#050505] to-transparent z-10 pointer-events-none" />
+        {/* ── MOBILE BİLGİ PANELİ (açılır kapanır) ───────────────────── */}
+        <AnimatePresence>
+          {showMobileInfo && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              className="md:hidden overflow-hidden bg-[#080808] border-b border-white/5 shrink-0"
+            >
+              <div className="px-4 py-3 grid grid-cols-2 gap-2">
+                {characterInfoItems.map(item => (
+                  <div key={item.label} className={cn("p-2.5 bg-white/[0.02] border border-white/[0.03] rounded-lg", item.label === 'İfadesi (Alibi)' ? 'col-span-2' : '')}>
+                    <div className="flex items-center gap-1.5 text-[8px] text-gray-500 font-black uppercase tracking-widest mb-1">
+                      {item.icon} {item.label}
+                    </div>
+                    <p className={cn("text-[11px] leading-relaxed break-words", item.italic ? 'text-amber-600/60 italic font-serif' : 'text-gray-400 font-mono')}>
+                      {item.val}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          {/* Chat Logs */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 md:p-10 space-y-8 custom-scrollbar scroll-smooth">
-            <div className="text-center pt-8 pb-4">
-              <div className="inline-flex items-center gap-3 px-6 py-2 bg-white/5 border border-white/10 rounded-full">
+        {/* ── SORGULAMA ALANI ─────────────────────────────────────────── */}
+        {/* Flex-1 + flex-col + overflow-hidden → chat scroll düzgün çalışır */}
+        <div className="flex-1 flex flex-col bg-[#070707] relative min-w-0 overflow-hidden">
+
+          {/* Desktop kapat butonu */}
+          <button
+            onClick={onClose}
+            className="hidden md:flex absolute top-4 right-4 xl:top-5 xl:right-5 p-2.5 bg-black/60 hover:bg-black/90 rounded-full text-white/60 hover:text-white z-50 transition-all border border-white/10"
+          >
+            <X size={20} />
+          </button>
+
+          <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-[#050505] to-transparent z-10 pointer-events-none" />
+
+          {/* Chat Logs — flex-1 + overflow-y-auto ile scroll burada olur */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 xl:px-10 pt-6 pb-4 space-y-6 custom-scrollbar scroll-smooth">
+            {/* Protokol başlığı */}
+            <div className="text-center pt-6 pb-2">
+              <div className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2 bg-white/5 border border-white/10 rounded-full">
                 <div className="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse" />
-                <span className="text-[10px] uppercase font-black tracking-[0.5em] text-gray-400">Canlı Sorgu Protokolü</span>
+                <span className="text-[9px] sm:text-[10px] uppercase font-black tracking-[0.3em] sm:tracking-[0.5em] text-gray-400">Canlı Sorgu Protokolü</span>
               </div>
             </div>
 
-            <div className="space-y-8 max-w-3xl mx-auto w-full">
+            <div className="space-y-6 max-w-3xl mx-auto w-full">
               <AnimatePresence>
                 {localHistory.map((msg, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
                     className={cn("flex flex-col group", msg.role === 'user' ? "items-end" : "items-start")}
                   >
-                    <div className={cn("mb-2 text-[9px] font-black uppercase tracking-widest flex items-center gap-2",
+                    <div className={cn("mb-1.5 text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5",
                       msg.role === 'user' ? "text-gray-500 flex-row-reverse" : "text-amber-500")}>
-                      {msg.role === 'user' ? <User size={10} /> : <Fingerprint size={10} />}
+                      {msg.role === 'user' ? <User size={9} /> : <Fingerprint size={9} />}
                       {msg.role === 'user' ? 'Dedektif' : character.name}
                     </div>
-
                     <div className={cn(
-                      "relative max-w-[90%] sm:max-w-[75%] px-6 py-5 rounded-2xl text-[15px] md:text-[16px] leading-[1.7] shadow-[0_15px_35px_rgba(0,0,0,0.3)] border break-words",
+                      "relative max-w-[92%] sm:max-w-[85%] lg:max-w-[800px] px-4 sm:px-5 py-3.5 sm:py-4 rounded-2xl text-[14px] sm:text-[15px] lg:text-[16px] 2xl:text-[17px] leading-[1.65] shadow-[0_10px_30px_rgba(0,0,0,0.3)] border break-words",
                       msg.role === 'user'
                         ? "bg-gradient-to-bl from-primary/80 to-primary/60 text-white border-red-900 rounded-tr-none"
-                        : "bg-[#111111] text-gray-200 border-white/5 font-serif italic rounded-tl-none prose-invert"
+                        : "bg-[#111111] text-gray-200 border-white/5 font-serif italic rounded-tl-none"
                     )}>
-                      {/* Plan Madde 3: Sadece en son model mesajında Typewriter kullan */}
                       {msg.role === 'model' && i === typewriterIndex ? (
                         <Typewriter
                           text={msg.message}
@@ -1889,9 +1975,7 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
                           charInterval={6}
                           onCharacter={() => {
                             play('click');
-                            if (scrollRef.current) {
-                              scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-                            }
+                            if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
                           }}
                         />
                       ) : (
@@ -1904,11 +1988,11 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
               </AnimatePresence>
 
               {isTyping && (
-                <div className="flex flex-col items-start bg-transparent">
-                  <div className="mb-2 text-[9px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-2">
-                    <Fingerprint size={10} /> {character.name}
+                <div className="flex flex-col items-start">
+                  <div className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-1.5">
+                    <Fingerprint size={9} /> {character.name}
                   </div>
-                  <div className="bg-[#111111] border border-white/5 px-6 py-5 rounded-2xl rounded-tl-none shadow-xl">
+                  <div className="bg-[#111111] border border-white/5 px-5 py-4 rounded-2xl rounded-tl-none shadow-xl">
                     <div className="flex gap-2">
                       {[0, 0.1, 0.2].map((delay, idx) => (
                         <div key={idx} className="w-2 h-2 bg-amber-500/40 rounded-full animate-bounce" style={{ animationDelay: `${delay}s` }} />
@@ -1920,23 +2004,25 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
             </div>
 
             {error && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center pb-4">
-                <div className="bg-red-950/40 border border-red-500/30 px-6 py-3 rounded-xl text-[11px] text-red-200 flex items-center gap-3">
-                  <AlertTriangle size={14} /> {error}
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center pb-2">
+                <div className="bg-red-950/40 border border-red-500/30 px-5 py-2.5 rounded-xl text-[11px] text-red-200 flex items-center gap-2.5">
+                  <AlertTriangle size={13} /> {error}
                 </div>
               </motion.div>
             )}
 
             {localHistory.length === 0 && !isTyping && (
-              <div className="text-center py-20 animate-in fade-in duration-1000">
-                <div className="w-20 h-20 rounded-full bg-white/[0.03] flex items-center justify-center mx-auto border border-white/10 text-gray-700 mb-8 shadow-inner">
-                  <MessageSquare size={32} />
+              <div className="text-center py-10 sm:py-16 animate-in fade-in duration-1000">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white/[0.03] flex items-center justify-center mx-auto border border-white/10 text-gray-700 mb-6 shadow-inner">
+                  <MessageSquare size={28} />
                 </div>
-                <h4 className="text-xl font-serif text-gray-500 italic mb-10">"Sessizlik, bir suçlunun en güvenli limanıdır..."</h4>
+                <h4 className="text-lg sm:text-xl font-serif text-gray-500 italic mb-6 sm:mb-8 px-4">"Sessizlik, bir suçlunun en güvenli limanıdır..."</h4>
                 <div className="flex flex-wrap gap-2 justify-center max-w-xl mx-auto px-2">
                   {quickQuestions.map(q => (
-                    <button key={q} onClick={() => { setQuestion(q); inputRef.current?.focus(); }}
-                      className="px-5 py-2.5 bg-[#0a0a0a] border border-white/5 hover:border-primary/40 rounded-full text-[11px] text-gray-500 hover:text-white transition-all hover:bg-white/5"
+                    <button
+                      key={q}
+                      onClick={() => { setQuestion(q); inputRef.current?.focus(); }}
+                      className="px-4 py-2 bg-[#0a0a0a] border border-white/5 hover:border-primary/40 rounded-full text-[11px] text-gray-500 hover:text-white transition-all hover:bg-white/5"
                     >{q}</button>
                   ))}
                 </div>
@@ -1944,36 +2030,42 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
             )}
           </div>
 
-          {/* Quick Suggestions Strip */}
+          {/* Quick Suggestions Strip — sadece konuşma başlamışsa, sm+ */}
           {localHistory.length > 0 && (
-            <div className="hidden sm:flex px-4 sm:px-6 py-3 gap-2 sm:gap-3 overflow-x-auto custom-scrollbar border-t border-white/5 bg-[#080808]">
+            <div className="hidden sm:flex shrink-0 px-4 sm:px-6 py-2.5 gap-2 overflow-x-auto custom-scrollbar border-t border-white/5 bg-[#080808]">
               {quickQuestions.map(q => (
-                <button key={q} onClick={() => { setQuestion(q); inputRef.current?.focus(); }}
-                  className="flex-shrink-0 px-4 py-2 bg-white/[0.02] border border-white/5 hover:border-primary/50 rounded-lg text-[10px] text-gray-600 hover:text-white transition-all whitespace-nowrap uppercase tracking-widest font-black"
+                <button
+                  key={q}
+                  onClick={() => { setQuestion(q); inputRef.current?.focus(); }}
+                  className="flex-shrink-0 px-3 py-1.5 bg-white/[0.02] border border-white/5 hover:border-primary/50 rounded-lg text-[10px] text-gray-600 hover:text-white transition-all whitespace-nowrap uppercase tracking-widest font-black"
                 >{q}</button>
               ))}
             </div>
           )}
 
-          {/* Input Unit */}
-          <div className="p-3 sm:p-5 md:p-6 border-t border-white/5 bg-[#050505] safe-area-bottom">
-            <form onSubmit={handleSubmit} className="relative max-w-3xl mx-auto flex gap-2 sm:gap-4 w-full">
+          {/* ── INPUT ALANI — her zaman ekranın en altında ────────────── */}
+          {/* pb-safe: iOS home bar çakışmasını önler */}
+          <div className="shrink-0 border-t border-white/5 bg-[#050505] px-3 sm:px-5 md:px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
+            <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex gap-2 sm:gap-3">
               <div className="flex-1 relative">
                 <input
                   ref={inputRef}
                   value={question}
                   onChange={e => setQuestion(e.target.value)}
                   placeholder={`${character.name} sorgulanıyor...`}
-                  className="w-full bg-[#111111] border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-6 py-3.5 sm:py-5 text-white text-[16px] placeholder:text-gray-700 focus:outline-none focus:border-red-900/50 transition-all shadow-inner font-serif"
+                  className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 sm:px-5 py-3 sm:py-4 text-white text-[15px] sm:text-[16px] placeholder:text-gray-700 focus:outline-none focus:border-red-900/50 transition-all shadow-inner font-serif"
                 />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-                  <kbd className="hidden sm:inline-block px-2 py-0.5 rounded text-[8px] bg-white/5 border border-white/10 text-gray-600 font-bold uppercase tracking-widest">Enter</kbd>
-                </div>
+                <kbd className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[8px] bg-white/5 border border-white/10 text-gray-600 font-bold uppercase tracking-widest pointer-events-none">
+                  Enter
+                </kbd>
               </div>
-              <button type="submit" disabled={isTyping || !question.trim()}
-                className="w-12 h-12 sm:w-14 sm:h-14 bg-primary hover:bg-red-800 disabled:bg-gray-900 duration-300 text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-[0_15px_45px_rgba(139,0,0,0.2)] transition-all shrink-0"
+              <button
+                type="submit"
+                disabled={isTyping || !question.trim()}
+                className="w-11 h-11 sm:w-13 sm:h-13 md:w-14 md:h-14 self-center bg-primary hover:bg-red-800 disabled:bg-gray-900 disabled:opacity-50 text-white rounded-xl flex items-center justify-center shadow-[0_8px_30px_rgba(139,0,0,0.25)] transition-all shrink-0 aspect-square"
+                style={{ width: 'clamp(2.75rem, 8vw, 3.5rem)', height: 'clamp(2.75rem, 8vw, 3.5rem)' }}
               >
-                {isTyping ? <Loader2 className="animate-spin" size={24} /> : <Send size={24} />}
+                {isTyping ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
               </button>
             </form>
           </div>
@@ -2025,7 +2117,7 @@ function DeductionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 md:p-8 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 bg-black/95 z-[300] flex items-center justify-center p-4 md:p-8 backdrop-blur-md overflow-y-auto">
       <motion.div
         initial={{ scale: 0.92, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
