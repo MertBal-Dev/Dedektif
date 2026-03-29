@@ -74,7 +74,7 @@ function EvidenceZoomOverlay({ evidence, onClose }: { evidence: Evidence; onClos
         initial={{ opacity: 0, scale: 0.8, y: 40, rotate: -2 }}
         animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
         exit={{ opacity: 0, scale: 0.8, y: 40, rotate: 2 }}
-        className="relative max-w-4xl w-full aspect-[4/5] md:aspect-video bg-[#0f0e0c] rounded-2xl overflow-hidden shadow-[0_32px_64px_rgba(0,0,0,0.8)] border border-white/10"
+        className="relative max-w-4xl w-full aspect-[4/5] md:aspect-video bg-[#0f0e0c] rounded-2xl overflow-hidden shadow-[0_32px_64px_rgba(0,0,0,0.8)] border border-white/10 flex flex-col md:flex-row h-full max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
@@ -85,7 +85,7 @@ function EvidenceZoomOverlay({ evidence, onClose }: { evidence: Evidence; onClos
           <X size={20} />
         </button>
 
-        <div className="flex flex-col md:flex-row h-full">
+        <div className="flex flex-col md:flex-row h-full w-full">
           {/* Image Section */}
           <div className="relative flex-[1.5] bg-black overflow-hidden group">
             <img
@@ -107,7 +107,7 @@ function EvidenceZoomOverlay({ evidence, onClose }: { evidence: Evidence; onClos
           {/* Details Section */}
           <div className="flex-1 flex flex-col bg-[#0d0c0a] border-l border-white/5 overflow-hidden">
             {/* Scrollable Content Area */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-8 md:p-12 space-y-8">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-8 md:p-12 space-y-6 md:space-y-8">
               <div className="space-y-6">
                 <div className="flex items-center gap-3 text-amber-500/60 uppercase tracking-[0.3em] text-[10px] font-bold">
                   <ScanSearch size={14} />
@@ -115,7 +115,7 @@ function EvidenceZoomOverlay({ evidence, onClose }: { evidence: Evidence; onClos
                 </div>
 
                 <div className="space-y-4">
-                  <p className="text-xl md:text-2xl font-serif text-gray-200 italic leading-relaxed quote-text">
+                  <p className="text-lg sm:text-xl md:text-2xl font-serif text-gray-200 italic leading-relaxed quote-text">
                     "{evidence.clueText}"
                   </p>
                   <div className="w-12 h-1 bg-amber-900/30 rounded-full" />
@@ -159,36 +159,36 @@ function RevealPopup({ object, onClose }: RevealPopupProps) {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9, y: 4 }}
       transition={{ type: 'spring', damping: 22, stiffness: 300 }}
-      className="absolute z-30 w-64 pointer-events-auto"
+      className="absolute z-50 w-48 sm:w-64 pointer-events-auto"
       style={{
         // Popup'u ekrandan taşmayacak şekilde konumlandır
-        left: object.x > 60 ? 'auto' : '50%',
-        right: object.x > 60 ? '50%' : 'auto',
-        transform: object.x > 60 ? 'translateX(0)' : 'translateX(-50%)',
-        bottom: object.y > 60 ? '120%' : 'auto',
-        top: object.y <= 60 ? '120%' : 'auto',
+        left: object.x > 80 ? 'auto' : object.x < 20 ? '0' : '50%',
+        right: object.x > 80 ? '0' : 'auto',
+        transform: (object.x > 80 || object.x < 20) ? 'none' : 'translateX(-50%)',
+        bottom: object.y > 50 ? 'calc(100% + 12px)' : 'auto',
+        top: object.y <= 50 ? 'calc(100% + 12px)' : 'auto',
       }}
     >
-      <div className="bg-[#0d0b08] border border-amber-900/40 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] overflow-hidden">
+      <div className="bg-[#0d0b08]/95 border border-amber-900/60 rounded-xl shadow-[0_12px_48px_rgba(0,0,0,0.9)] overflow-hidden backdrop-blur-md">
         {/* Başlık */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-amber-900/20 bg-amber-950/20">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-amber-900/30 bg-amber-950/40">
           <div className="flex items-center gap-2">
             <span className="text-base">{object.icon}</span>
-            <span className="text-[11px] font-bold uppercase tracking-widest text-amber-400/80">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-amber-400">
               {object.label}
             </span>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-600 hover:text-gray-400 transition-colors p-0.5"
+            className="text-gray-500 hover:text-gray-300 transition-colors p-0.5"
           >
             <X size={13} />
           </button>
         </div>
 
         {/* İçerik */}
-        <div className="p-3">
-          <p className="text-[13px] text-gray-300 font-serif italic leading-relaxed">
+        <div className="p-3.5">
+          <p className="text-[14px] text-white font-serif italic leading-relaxed text-shadow-sm">
             {object.revealText}
           </p>
 
@@ -350,7 +350,7 @@ export function InteractiveScene({ evidence: sceneEvidence, onClose, className }
   }, [sceneEvidence.id, revealInteractiveObject, currentCase]);
 
   return (
-    <div className={`relative w-full rounded-xl overflow-hidden bg-black ${className}`}>
+    <div className={`relative w-full rounded-xl bg-black ${className}`}>
 
       {/* Üst bar */}
       <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-2.5 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">

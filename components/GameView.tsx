@@ -309,16 +309,33 @@ export default function GameView({ caseData }: { caseData: Case }) {
     notification, showNotification,
     confrontationResult, clearConfrontation,
     isLoading, loadingMessage,
+    getSmartHint, lastActivityTime,
   } = useGame();
-  const { play } = useSound(); // Plan Madde 4
+  const { play } = useSound();
 
   const [selectedSuspect, setSelectedSuspect] = useState<Character | null>(null);
   const [selectedAccusationSuspect, setSelectedAccusationSuspect] = useState<Character | null>(null);
   const [accusationResult, setAccusationResult] = useState<{ correct: boolean; message: string } | null>(null);
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  // ── Hardcore Gizem: Yardım Al butonu state ───────────────────────────────────
+  const [smartHint, setSmartHint] = useState<{ type: string; message: string; targetId?: string } | null>(null);
+  const [isHintStuck, setIsHintStuck] = useState(false); // 15dk hareketsizlik uyarısı
 
   const foundCount = gameState.foundEvidenceIds.length;
   const solvedPuzzles = gameState.unlockedClueIds.length;
+
+  // ── Hardcore Gizem: 15 dakika hareketsizlik kontrolü ─────────────────────────
+  useEffect(() => {
+    const STUCK_THRESHOLD_MS = 15 * 60 * 1000; // 15 dakika
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivityTime > STUCK_THRESHOLD_MS) {
+        setIsHintStuck(true);
+      } else {
+        setIsHintStuck(false);
+      }
+    }, 30_000); // 30 saniyede bir kontrol
+    return () => clearInterval(interval);
+  }, [lastActivityTime]);
 
   // ── Ses kaplama fonksiyonları (Plan Madde 4) ─────────────────────────────────
   const findEvidenceWithSound = useCallback((id: string) => {
@@ -428,21 +445,49 @@ export default function GameView({ caseData }: { caseData: Case }) {
             <div className="pt-3 border-t border-white/5 space-y-3">
               <p className="text-accent/80 font-bold uppercase tracking-[0.2em]">İlerleme</p>
               {[
-                { label: 'Kanıtlar', val: foundCount, total: caseData.evidence.length, color: 'bg-accent' },
-                { label: 'Bulmacalar', val: solvedPuzzles, total: caseData.puzzles.length, color: 'bg-primary' },
+                { label: 'Kanıtlar', val: foundCount, color: 'bg-accent' },
+                { label: 'Bulmacalar', val: solvedPuzzles, color: 'bg-primary' },
               ].map(item => (
                 <div key={item.label}>
-                  <div className="flex justify-between mb-1.5 text-[9px]"><span className="uppercase tracking-wider">{item.label}</span><span className="text-white font-mono">{item.val}/{item.total}</span></div>
+                  <div className="flex justify-between mb-1.5 text-[9px]">
+                    <span className="uppercase tracking-wider">{item.label}</span>
+                    <span className="text-white font-mono">{item.val} / <span className="text-gray-600">?</span></span>
+                  </div>
                   <div className="h-1.5 bg-black rounded-full overflow-hidden border border-white/5">
-                    <div className={cn("h-full transition-all duration-700 rounded-full", item.color)} style={{ width: `${(item.val / Math.max(1, item.total)) * 100}%` }} />
+                    <div
+                      className={cn("h-full transition-all duration-700 rounded-full", item.color)}
+                      style={{ width: `${Math.min(100, item.val * 10)}%` }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-        {/* Content */}
+          {/* ── Yardım Al Butonu (Hardcore Gizem) ─────────────────────────── */}
+          <button
+            onClick={() => {
+              const hint = getSmartHint();
+              setSmartHint(hint);
+              play('click');
+            }}
+            className={cn(
+              "group w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border transition-all duration-300 text-left",
+              isHintStuck
+                ? "bg-accent/10 border-accent/40 text-accent animate-pulse"
+                : "bg-[#0a0a0a] border-white/5 text-gray-500 hover:bg-white/5 hover:border-white/10 hover:text-gray-300"
+            )}
+          >
+            <Lightbulb size={15} className={isHintStuck ? "text-accent" : "text-gray-600 group-hover:text-gray-400"} />
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-widest block">Yardım Al</span>
+              {isHintStuck && (
+                <span className="text-[8px] text-accent/70 block mt-0.5">Takılı kaldın mı?</span>
+              )}
+            </div>
+            <span className="text-[8px] text-gray-600 font-mono">-75p</span>
+          </button>
+        </div>
         <div className="min-h-[60vh] lg:min-h-[78vh] bg-[#0a0a0a]/90 border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative">
           <AnimatePresence mode="wait">
             <motion.div
@@ -534,6 +579,17 @@ export default function GameView({ caseData }: { caseData: Case }) {
               </span>
             </button>
           ))}
+          {/* Mobile Yardım Al */}
+          <button
+            onClick={() => { const hint = getSmartHint(); setSmartHint(hint); play('click'); }}
+            className={cn(
+              "flex flex-col items-center gap-1 py-2.5 px-2 flex-1 relative transition-all duration-200",
+              isHintStuck ? "text-accent animate-pulse" : "text-gray-600"
+            )}
+          >
+            <Lightbulb size={16} />
+            <span className="text-[9px] font-bold uppercase tracking-wider leading-none">Yardım</span>
+          </button>
         </div>
       </nav>
 
@@ -624,6 +680,20 @@ export default function GameView({ caseData }: { caseData: Case }) {
         )}
       </AnimatePresence>
 
+      {/* ── Yardım Al Modal (Hardcore Gizem) ───────────────────────────────── */}
+      <AnimatePresence>
+        {smartHint && (
+          <SmartHintModal
+            hint={smartHint}
+            onClose={() => setSmartHint(null)}
+            onNavigate={(tab) => {
+              setActiveTab(tab as TabType);
+              setSmartHint(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       <style dangerouslySetInnerHTML={{
         __html: `
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -644,6 +714,78 @@ export default function GameView({ caseData }: { caseData: Case }) {
           <LoadingOverlay message={loadingMessage || 'Değerlendiriliyor...'} />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── SmartHintModal (Hardcore Gizem) ─────────────────────────────────────────
+function SmartHintModal({
+  hint,
+  onClose,
+  onNavigate,
+}: {
+  hint: { type: string; message: string; targetId?: string };
+  onClose: () => void;
+  onNavigate: (tab: string) => void;
+}) {
+  const iconMap: Record<string, React.ReactNode> = {
+    scene: <ScanSearch size={22} className="text-blue-400" />,
+    puzzle: <PuzzleIcon size={22} className="text-purple-400" />,
+    interrogation: <MessageSquare size={22} className="text-accent" />,
+    none: <Lightbulb size={22} className="text-gray-400" />,
+  };
+
+  const navTabMap: Record<string, string> = {
+    scene: 'evidence',
+    puzzle: 'puzzles',
+    interrogation: 'suspects',
+  };
+
+  const canNavigate = hint.type !== 'none' && navTabMap[hint.type];
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[400] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+      <motion.div
+        initial={{ y: 30, opacity: 0, scale: 0.97 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 20, opacity: 0, scale: 0.97 }}
+        transition={{ type: 'spring', damping: 28 }}
+        className="max-w-sm w-full bg-[#0d0d0d] border border-accent/30 rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(212,175,55,0.1)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0">
+              {iconMap[hint.type] || iconMap.none}
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.3em] text-accent font-bold">Dedektif İpucu</p>
+              <p className="text-[10px] text-gray-500 font-mono">-75 puan harcandı</p>
+            </div>
+          </div>
+
+          <p className="text-gray-200 font-serif italic leading-relaxed text-[14px] border-l-2 border-accent/40 pl-4">
+            "{hint.message}"
+          </p>
+
+          <div className="flex gap-2 pt-1">
+            {canNavigate && (
+              <button
+                onClick={() => onNavigate(navTabMap[hint.type])}
+                className="flex-1 py-2.5 bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent text-[9px] uppercase font-bold tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5"
+              >
+                <ArrowRight size={12} /> Oraya Git
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 text-[9px] uppercase font-bold tracking-widest rounded-xl transition-all"
+            >
+              Anladım
+            </button>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -1034,7 +1176,7 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles }:
       <div className="flex justify-between items-end border-b border-white/10 pb-5">
         <div>
           <h3 className="text-2xl sm:text-3xl font-serif text-white">Soruşturma Panosu</h3>
-          <p className="text-gray-500 text-sm mt-1">{foundIds.length} / {evidence.length} kanıt bulundu</p>
+          <p className="text-gray-500 text-sm mt-1">{foundIds.length} / ? kanıt bulundu</p>
         </div>
         <button
           onClick={() => setSearchMode(!searchMode)}
@@ -1191,7 +1333,7 @@ function EvidenceModal({ evidence, onClose, onImageClick }: {
         className="max-w-2xl w-full bg-[#0a0a0a] border border-white/15 rounded-2xl overflow-hidden shadow-2xl max-h-[98vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar mx-0 sm:mx-4"
       >
         {/* Interactive Scene Integration in Modal */}
-        <div className="border-b border-white/10 max-h-[40vh] sm:max-h-none overflow-hidden">
+        <div className="border-b border-white/10 max-h-[45vh] sm:max-h-none min-h-[220px]">
           <InteractiveScene evidence={evidence} />
         </div>
         <div className="relative h-48 sm:h-56 border-b border-white/10 bg-black cursor-zoom-in group"
@@ -1374,7 +1516,7 @@ function PuzzleCard({ puzzle, isSolved, onSolve, onHint, onImageClick, linkedEvi
             <AnimatePresence>
               {showImage && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden rounded-xl border border-white/10 relative"
+                  className="rounded-xl border border-white/10 relative"
                 >
                   {puzzle.interactiveObjects && puzzle.interactiveObjects.length > 0 ? (
                     <InteractiveScene
@@ -1532,7 +1674,7 @@ function Notebook({ entries, onAddEntry, caseData, foundEvidenceIds, suspicionLe
         <p className="text-[10px] text-accent uppercase font-bold tracking-widest flex items-center gap-2"><BookOpen size={13} /> Soruşturma Özeti</p>
         <div className="grid grid-cols-2 gap-2 sm:gap-3">
           {[
-            { label: 'Toplanan Kanıt', val: `${foundEvidenceIds.length}/${caseData.evidence.length}` },
+            { label: 'Toplanan Kanıt', val: `${foundEvidenceIds.length} / ?` },
             { label: 'Ana Şüpheli', val: topSuspect?.name || '-', color: 'text-primary' },
             { label: 'Olay Zamanı', val: caseData.timeOfDeath || '?' },
             { label: 'Ölüm Nedeni', val: caseData.causeOfDeath || '?' },
@@ -1991,20 +2133,20 @@ function DeductionModal({
                   >
                     {/* Image Header */}
                     <div className="w-full h-24 bg-black/60 relative overflow-hidden flex-shrink-0 border-b border-white/5">
-                      <CaseImage 
-                        src={ev.generatedImageUrl} 
-                        alt={ev.title} 
+                      <CaseImage
+                        src={ev.generatedImageUrl}
+                        alt={ev.title}
                         fallbackSeed={ev.id}
                         className="w-full h-full"
                         contain={true}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
-                      
+
                       {/* Selection Badge */}
                       <div className={cn(
                         'absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 z-20',
-                        isSelected 
-                          ? 'border-accent bg-accent scale-110 shadow-[0_0_10px_rgba(212,175,55,0.5)]' 
+                        isSelected
+                          ? 'border-accent bg-accent scale-110 shadow-[0_0_10px_rgba(212,175,55,0.5)]'
                           : 'border-white/20 bg-black/40'
                       )}>
                         {isSelected ? (

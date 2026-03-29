@@ -8,6 +8,7 @@ import {
   evaluatePuzzleAction,
   evaluateAccusationAction
 } from '@/app/actions/game';
+import { getAvailableCaseFromCache, saveNewCaseToCache } from '@/app/actions/cache';
 import { interrogateSuspectAction } from '@/app/actions/interrogate';
 import { MOCK_CASE } from '@/lib/mockCase';
 
@@ -57,6 +58,9 @@ interface GameContextType {
   loadSavedGame: () => Promise<void>;
   clearStorage: () => Promise<void>;
   startDemoCase: () => void;
+  // ── Hardcore Gizem: Akıllı Yardım ───────────────────────────────────────────
+  getSmartHint: () => { type: 'scene' | 'interrogation' | 'puzzle' | 'none'; message: string; targetId?: string };
+  lastActivityTime: number;
 }
 
 // ─── IndexedDB Utils ───────────────────────────────────────────────────────────
@@ -166,6 +170,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const [confrontationResult, setConfrontationResult] = useState<any | null>(null);
   const [hasSavedGame, setHasSavedGame] = useState(false);
+  const [playedCaseIds, setPlayedCaseIds] = useState<string[]>([]);
+  // ── Hardcore Gizem: Son aktivite zamanı (Yardım Al için) ─────────────────────
+  const [lastActivityTime, setLastActivityTime] = useState<number>(Date.now());
 
   const clearConfrontation = useCallback(() => {
     setConfrontationResult(null);
@@ -176,9 +183,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       try {
         const savedState = localStorage.getItem('dedektif_game_state_v2');
         const savedCase = await loadCaseFromDB();
+        const savedPlayedIds = localStorage.getItem('dedektif_played_cases_v2');
 
         if (savedState && savedCase) {
           setHasSavedGame(true);
+        }
+        if (savedPlayedIds) {
+          setPlayedCaseIds(JSON.parse(savedPlayedIds));
         }
       } catch (e) {
         console.warn('Storage check failed:', e);
@@ -259,6 +270,38 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setLoadingMessage('Soruşturma dosyası açılıyor...');
     setError(null);
 
+    // ── GİZLİ ADIM: CACHE KONTROLÜ (Maliyet Dostu) ──────────────────────────────
+    try {
+      const selectedTheme = theme || "Karma Vakalar";
+      const cachedCase = await getAvailableCaseFromCache(selectedTheme, playedCaseIds);
+      
+      if (cachedCase) {
+        setGenerationProgress(50);
+        setLoadingMessage('Arşivden vaka dosyası getiriliyor...');
+        
+        // Simüle edilmiş bir bekleme (anında açılmasın, hissiyat için)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        setCurrentCase(normalizeCase(cachedCase));
+        setGameState({
+          ...INITIAL_GAME_STATE,
+          currentCaseId: cachedCase.id,
+          solvedCaseIds: gameState.solvedCaseIds,
+          timeStarted: new Date().toISOString(),
+          discoveredChapterIds: cachedCase.chapters?.filter((ch: any) => ch.isUnlocked).map((ch: any) => ch.id) || [],
+          revealedObjectIds: [],
+          puzzleAttempts: {},
+        });
+        setGenerationProgress(100);
+        setIsLoading(false);
+        showNotification('info', 'Arşivdeki gizemli bir vaka dosyası açıldı.');
+        return;
+      }
+    } catch (cacheErr) {
+      console.warn('Cache check failed, moving to generation:', cacheErr);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const simulationPhases = [
       { progress: 5, message: 'Suç mahalli inceleniyor...' },
       { progress: 12, message: 'Olay yeri kordon altına alınıyor...' },
@@ -331,21 +374,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
       });
 
-      // ── YENİ 3. ADIM: PARALEL HAVUZ (CHUNKING) MANTIĞI ───────────────────────
-      // Artık görselleri tek tek beklemiyoruz. 3'lü gruplar halinde aynı anda istiyoruz.
+      // 3. ADIM: PARALEL HAVUZ (CHUNKING) MANTIĞI
       const chunkSize = 3;
-
       for (let i = 0; i < tasks.length; i += chunkSize) {
-        // Sıradaki 3 görevi (chunk) al
         const chunk = tasks.slice(i, i + chunkSize);
-
-        // Progress bar ve yükleme mesajını güncelle
         const completedTasks = Math.min(i + chunkSize, tasks.length);
         const currentProgress = 10 + Math.round((completedTasks / tasks.length) * 85);
         setGenerationProgress(currentProgress);
         setLoadingMessage(messages[Math.floor(i / chunkSize) % messages.length]);
 
-        // Bu 3 görevin hepsini AYNI ANDA server'a gönder ve hepsinin dönmesini bekle
         await Promise.all(
           chunk.map(async (t) => {
             try {
@@ -357,10 +394,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
           })
         );
       }
-      // ─────────────────────────────────────────────────────────────────────────
 
       setGenerationProgress(98);
-      setLoadingMessage('Kanıt dosyaları mühürleniyor...');
+      setLoadingMessage('Vaka arşive kaydediliyor...');
+      
+      // ── YENİ ADIM: ÜRETİLEN VAKAYI CACHE'E KAYDET ─────────────────────────────
+      try {
+        await saveNewCaseToCache(updatedCase);
+      } catch (cacheSaveErr) {
+        console.warn('Vaka cache\'e kaydedilemedi:', cacheSaveErr);
+      }
+      // ─────────────────────────────────────────────────────────────────────────
 
       // 4. ADIM: State Güncelle ve Başlat
       setCurrentCase(updatedCase);
@@ -383,25 +427,88 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [gameState.solvedCaseIds]);
+  }, [gameState.solvedCaseIds, playedCaseIds, showNotification]);
 
-  const startDemoCase = useCallback(() => {
+  const startDemoCase = useCallback(async () => {
     setIsLoading(true);
     setLoadingMessage('Demo Dosyası Hazırlanıyor...');
-    setGenerationProgress(50);
+    setGenerationProgress(10);
+    setError(null);
 
-    setTimeout(() => {
-      setCurrentCase(MOCK_CASE);
+    // ── GİZLİ ADIM: CACHE KONTROLÜ (DUMENDEN :)) ────────────────────────────
+    try {
+      const demoTheme = MOCK_CASE.theme; // Noir / 1950'ler
+      const cachedDemo = await getAvailableCaseFromCache(demoTheme, playedCaseIds);
+      
+      if (cachedDemo) {
+        setGenerationProgress(70);
+        setLoadingMessage('Demo dosyası arşivden çıkarılıyor...');
+        
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        setCurrentCase(normalizeCase(cachedDemo));
+        setGameState({
+          ...INITIAL_GAME_STATE,
+          currentCaseId: cachedDemo.id,
+          solvedCaseIds: gameState.solvedCaseIds,
+          timeStarted: new Date().toISOString(),
+          discoveredChapterIds: cachedDemo.chapters?.filter((ch: any) => ch.isUnlocked).map((ch: any) => ch.id) || [],
+          revealedObjectIds: [],
+          puzzleAttempts: {},
+        });
+        
+        setGenerationProgress(100);
+        setIsLoading(false);
+        showNotification('info', 'Arşivdeki demo vaka dosyası başarıyla açıldı.');
+        return;
+      }
+    } catch (cacheErr) {
+      console.warn('Demo cache check failed:', cacheErr);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    try {
+      // 1. ADIM: Demo Veriyi Al (Dümenden :))
+      const demoCase = JSON.parse(JSON.stringify(MOCK_CASE)) as Case;
+      
+      // CRITICAL FIX: UUID Format (Postgres için gerçek UUID olmalı)
+      demoCase.id = crypto.randomUUID();
+
+      // 2. ADIM: Sadece 2 Tane Görsel Üretelim (Test İçin)
+      setLoadingMessage('Demo için ana sahne çiziliyor...');
+      setGenerationProgress(30);
+      const mainImg = await generateSingleImageAction(demoCase.imagePrompt);
+      if (mainImg) demoCase.generatedImageUrl = mainImg;
+
+      if (demoCase.victim) {
+        setLoadingMessage('Demo için kurban dosyası hazırlanıyor...');
+        setGenerationProgress(60);
+        const victimImg = await generateSingleImageAction(demoCase.victim.imagePrompt);
+        if (victimImg) demoCase.victim.generatedImageUrl = victimImg;
+      }
+
+      // 3. ADIM: Supabase Cache'e Gönder (Tüm Pipeline'ı Test Et)
+      setLoadingMessage('Demo vaka arşive kaydediliyor (WebP/Storage Test)...');
+      setGenerationProgress(85);
+      await saveNewCaseToCache(demoCase);
+
+      // 4. ADIM: Başlat
+      setCurrentCase(demoCase);
       setGameState({
         ...INITIAL_GAME_STATE,
-        currentCaseId: MOCK_CASE.id,
+        currentCaseId: demoCase.id,
         timeStarted: new Date().toISOString(),
-        discoveredChapterIds: MOCK_CASE.chapters.filter(ch => ch.isUnlocked).map(ch => ch.id),
+        discoveredChapterIds: demoCase.chapters.filter(ch => ch.isUnlocked).map(ch => ch.id),
       });
-      setIsLoading(false);
+      
       setGenerationProgress(100);
-      showNotification('success', 'Demo vaka başlatıldı. İyi testler!');
-    }, 1000);
+      setIsLoading(false);
+      showNotification('success', 'Demo vaka ve 2 özel görsel hazır! Supabase kontrol edilebilir.');
+    } catch (err: any) {
+      console.error('Demo test error:', err);
+      setError('Demo testi sırasında bir hata oluştu.');
+      setIsLoading(false);
+    }
   }, [showNotification]);
 
   const findEvidence = useCallback((evidenceId: string) => {
@@ -426,6 +533,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (prev.foundEvidenceIds.includes(evidenceId)) return prev;
 
       showNotification('success', targetEvidence.title + ' dosyaya eklendi! Kanıtlar sekmesini incele.');
+      setLastActivityTime(Date.now());
 
       return {
         ...prev,
@@ -612,6 +720,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         },
         score: prev.score + 25,
       }));
+      setLastActivityTime(Date.now());
 
       return response;
     } catch (err: any) {
@@ -677,6 +786,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
           accusationCount: prev.accusationCount + 1,
         }));
 
+        // ── CACHE: Oynanan vakayı listeye ekle ─────────────────────────────────
+        setPlayedCaseIds(prev => {
+          const updated = [...prev, currentCase.id];
+          localStorage.setItem('dedektif_played_cases_v2', JSON.stringify(updated));
+          return updated;
+        });
+
         return { correct: true, result };
       } else {
         setGameState(prev => ({
@@ -694,6 +810,63 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, [currentCase, gameState]);
+
+  // ── Hardcore Gizem: Bağlamsal Akıllı Yardım ──────────────────────────────────
+  const getSmartHint = useCallback((): {
+    type: 'scene' | 'interrogation' | 'puzzle' | 'none';
+    message: string;
+    targetId?: string;
+  } => {
+    if (!currentCase) return { type: 'none', message: 'Aktif bir soruşturma yok.' };
+
+    // 1. Öncelik: Taranmamış sahne içeren, bulunamamış, gizli olmayan kanıt var mı?
+    const unscannedSceneEvidence = currentCase.evidence.find(ev =>
+      !ev.isFound &&
+      !ev.isHidden &&
+      ev.interactiveObjects && ev.interactiveObjects.length > 0 &&
+      !currentCase.puzzles.some(p => p.unlocksEvidenceId === ev.id && !p.isSolved)
+    );
+    if (unscannedSceneEvidence) {
+      setGameState(prev => ({ ...prev, hintsUsed: prev.hintsUsed + 1, score: Math.max(0, prev.score - 75) }));
+      return {
+        type: 'scene',
+        message: `Olay yerinin her köşesini iyi incelemedin. ${unscannedSceneEvidence.location} bölgesinde henüz keşfedilmemiş izler olabilir.`,
+        targetId: unscannedSceneEvidence.id,
+      };
+    }
+
+    // 2. Öncelik: Çözülmemiş bulmaca var mı?
+    const unsolvedPuzzle = currentCase.puzzles.find(p => !p.isSolved);
+    if (unsolvedPuzzle) {
+      setGameState(prev => ({ ...prev, hintsUsed: prev.hintsUsed + 1, score: Math.max(0, prev.score - 75) }));
+      return {
+        type: 'puzzle',
+        message: `"${unsolvedPuzzle.title}" bulmacası seni bekliyor. Çözersen yeni bir kanıta ulaşabilirsin.`,
+        targetId: unsolvedPuzzle.id,
+      };
+    }
+
+    // 3. Öncelik: Az sorgulanmış şüpheli var mı?
+    const leastInterrogated = currentCase.characters
+      .map(c => ({ char: c, count: (gameState.interrogationHistory[c.id] || []).length / 2 }))
+      .sort((a, b) => a.count - b.count)[0];
+
+    if (leastInterrogated && leastInterrogated.count < 3) {
+      setGameState(prev => ({ ...prev, hintsUsed: prev.hintsUsed + 1, score: Math.max(0, prev.score - 75) }));
+      return {
+        type: 'interrogation',
+        message: `${leastInterrogated.char.name} ile yeterince konuşmadın. Onun tutumunu ve alibisini daha derinlemesine sorgulamaya ne dersin?`,
+        targetId: leastInterrogated.char.id,
+      };
+    }
+
+    // 4. Hiçbiri yoksa: Genel yönlendirme
+    setGameState(prev => ({ ...prev, hintsUsed: prev.hintsUsed + 1, score: Math.max(0, prev.score - 75) }));
+    return {
+      type: 'interrogation',
+      message: 'Tüm fiziksel kanıtları topladın gibi görünüyor. Şüphelilerden birinin sorgusunda henüz sorulmamış bir soru gizlenmiş olabilir. Motifleri ve alibilerini çapraz karşılaştır.',
+    };
+  }, [currentCase, gameState.interrogationHistory]);
 
   const exitCase = useCallback(async () => {
     setCurrentCase(null);
@@ -737,6 +910,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       notification,
       showNotification,
       startDemoCase,
+      getSmartHint,
+      lastActivityTime,
     }}>
       {children}
     </GameContext.Provider>
@@ -750,6 +925,9 @@ export function useGameContext() {
   }
   return context;
 }
+
+// Alias — GameView ve diğer feature dosyaları bu isimle kullanabilir
+export const useGame = useGameContext;
 
 function normalizeCase(caseData: Case): Case {
   return {

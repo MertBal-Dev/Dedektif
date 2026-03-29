@@ -124,16 +124,22 @@ Her vaka MUTLAKA şunları içermelidir:
 - motive: Cinayeti işlemek için nedeni (para, kıskançlık, intikam, korku)
 - Sadece biri gerçekten katil ama tüm kanıtlar ve sorgular birleşmeden kesin sonuç çıkmamalı.
 
-**KANITLAR (8 adet — YARATICI VE BELGELENEBİLİR KANIT KURALI):**
+**KANITLAR (8 ile 12 ADET ARASI — RASTGELE BOYUT KURALI):**
+- **DİNAMİK BOYUT:** Her vakada kanıt sayısı 8 ile 12 arasında rastgele belirlenmelidir. Bu sayıyı sen seç; oyuncu başlangıçta toplam kaç kanıt olduğunu GÖRMEYECEK (UI "0 / ?" formatında gösterir). Sürpriz unsurunu koru.
+- **ASİMETRİK ŞÜPHELİ DAĞILIMI (ZORUNLU):** Her şüphelinin mutlaka bir kanıta sahip olması GEREKMİYOR. Dağılım şu kurala göre yapılmalı:
+  * Bazı şüphelilerin hiç kanıtı olmayabilir (0 kanıt — karakterin tutumu sorguya yansır, ama sahne/bulmacayla bulunacak fiziksel kanıt yoktur).
+  * Bazı şüphelilerin 2 veya 3 kanıtı olabilir (bunlardan biri isHidden: true olabilir).
+  * Katil her zaman en az 2 kanıta sahip olmalı, ama bu kanıtlar oyun ortasına kadar gizli kalabilir.
+  * Dağılım oyuncuyu "bu adamı sorgulasam bir şey çıkar mı?" diye düşündürmeli.
 - Kanıtlar; fiziksel nesneler (anahtar, mendil) olabileceği gibi, somut bir veriyi temsil eden belgeler (banka dökümü, günlük sayfası, eczane fişi, dijital kayıtlar) de olabilir.
 - **YARATICILIK:** Sadece "yerde bulunan bıçak" gibi klasiklerden kaçın. Örn: "Kurbanın banka dökümünde görünen şüpheli bir eczane harcaması", "Katilin olay yerinde unuttuğu, sadece belirli bir terziye ait olan nadir bir düğme", "Kurbanın telefonundaki yarım kalmış bir mesaj".
 - **ERA-SPECIFIC:** Senaryo dönemiyle %100 uyumlu olmalı. (Osmanlı'da banka dökümü olmaz ama mühürlü bir vergi defteri olabilir).
 - **PRESENTABILITY:** Kanıtlar, final suçlamasında "İşte kanıtım!" diyerek masaya konulabilecek netlikte olmalı. Soyut hisler ('Şüpheli yalan söylüyor gibiydi') kanıt sayılmaz.
 - locationDescription: Oyuncuya yönelik atmosferik arama tarifi
 - clueText: Bu kanıtın hikayeye kattığı somut ipucu (Örn: "Şüphelinin o gece orada olduğunu kanıtlıyor")
-- linkedCharacterId: Hangi karakterle ilişkili
-- isHidden: (boolean) Eğer true ise, bu kanıt sahne taraması veya bulmaca ile BULUNAMAZ. Sadece sorgu odasında doğru sorular sorulduğunda karakterin [REVEAL:kanit_id] şeklinde cevap vermesiyle açılır. (Vakada 2 kanıt isHidden: true olmalıdır)
-- 2 kanıt başlangıçta bulunmuş (isFound: true), 6 tanesi keşfedilmeyi bekliyor
+- linkedCharacterId: Hangi karakterle ilişkili (dağılım asimetrik olduğu için null olabilir)
+- isHidden: (boolean) Eğer true ise, bu kanıt sahne taraması veya bulmaca ile BULUNAMAZ. Sadece sorgu odasında doğru sorular sorulduğunda karakterin [REVEAL:kanit_id] şeklinde cevap vermesiyle açılır. (Vakada en az 2 kanıt isHidden: true olmalıdır)
+- 2 kanıt başlangıçta bulunmuş (isFound: true), geri kalanlar keşfedilmeyi bekliyor
 - sceneImagePrompt: Kanıtın bulunduğu odanın/mekanın tamamını gösteren atmosferik sahne görseli için İNGİLİZCE prompt (nesne değil, MEKAN odaklı)
 - interactiveObjects: Bu mekanda oyuncunun tıklayabileceği 3-5 nesne. Her nesne şunları içermeli:
   * id: benzersiz string (örn: "ev001_hali")
@@ -141,9 +147,9 @@ Her vaka MUTLAKA şunları içermelidir:
   * x: 0-100 arası yatay konum yüzdesi (sol=0, sağ=100)
   * y: 0-100 arası dikey konum yüzdesi (üst=0, alt=100)
   * icon: temsil eden emoji (örn: "🔑", "📜", "🗄️", "🕯️", "📷")
-  * revealText: Türkçe, 1-2 cümle, atmosferik keşif metni. Sadece biri linkedEvidenceId içermeli.
+  * revealText: Türkçe, 1-2 cümle, atmosferik keşif metni. Bu nesneyi inceleyince ne görüldüğünü anlatır.
   * isRevealed: false (başlangıç değeri)
-  * linkedEvidenceId: sadece bir nesnede olmalı, bu kanıtın id'si
+  * linkedEvidenceId: (ZORUNLU) Sahne taramasındaki nesnelerden EN AZ BİRİ (ve sadece biri), bu kanıtın kendi ID'sini veya bu sahne aracılığıyla bulunacak başka bir kanıtın ID'sini içermelidir. Bu alan kesinlikle null veya undefined bırakılmamalıdır (Zira aksi halde oyuncu hiçbir şey bulamaz).
 
 **BULMACALAR (4 adet — çeşitli tipler):**
 - type seçenekleri: riddle (bilmece), code (şifre çözme), cipher (alfabe şifresi), logic (mantık sorusu), sequence (dizi tamamlama)
@@ -349,6 +355,15 @@ Talimatlar:
         const enrichedScenePrompt = ev.sceneImagePrompt
           ? injectSpatialContext(ev.sceneImagePrompt, normalizedObjects)
           : ev.sceneImagePrompt;
+
+        // ── GÜVENLİK: Eğer sahne taraması varsa ama hiçbir nesne kanıta bağlanmamışsa ──
+        if (ev.sceneImagePrompt && normalizedObjects.length > 0) {
+          const hasLink = normalizedObjects.some(obj => obj.linkedEvidenceId);
+          if (!hasLink) {
+            // İlk nesneyi dümenden bu kanıta bağla (Oyuncu takılı kalmasın)
+            normalizedObjects[0].linkedEvidenceId = ev.id;
+          }
+        }
 
         return {
           ...ev,
