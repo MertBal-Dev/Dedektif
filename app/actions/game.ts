@@ -29,12 +29,33 @@ export async function generateBaseCaseAction(theme?: string): Promise<Case> {
 
 /**
  * 2. ADIM: Tek bir prompt için görsel üretir.
- * Client tarafında döngü içinde çağrılarak ilerleme çubuğunu besler.
+ * ÖNEMLİ: Eğer görsel base64 olarak dönerse (Gemini), bunu HEMEN Supabase'e yükler
+ * ve URL döndürür. Böylece 413 Payload Too Large hatası önlenmiş olur.
  */
-export async function generateSingleImageAction(prompt: string): Promise<string | null> {
+export async function generateSingleImageAction(prompt: string, caseId?: string): Promise<string | null> {
   try {
     const { generateImage } = await import('@/utils/imageGenerator');
-    return await generateImage(prompt);
+    const result = await generateImage(prompt);
+    
+    if (!result) return null;
+
+    // Eğer sonuç bir base64 verisi ise (data:image/...)
+    if (result.startsWith('data:image')) {
+      console.log("♻️ [URL CONVERT] Base64 görsel algılandı, Supabase'e yükleniyor...");
+      const { processAndUploadImage } = await import('@/utils/supabaseStorage');
+      
+      // Geçici bir ID kullan veya varsa vaka ID'sini kullan
+      const folderId = caseId || `temp_${Date.now()}`;
+      const fileName = `img_${Math.random().toString(36).substring(7)}`;
+      
+      const publicUrl = await processAndUploadImage(result, folderId, fileName);
+      if (publicUrl) {
+        console.log("✅ [URL CONVERT] Görsel başarıyla host edildi:", publicUrl);
+        return publicUrl;
+      }
+    }
+
+    return result;
   } catch (error) {
     console.error("Single Image Generation Error:", error);
     return null;

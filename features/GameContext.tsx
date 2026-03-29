@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { Case, GameState, Character } from '@/types/game';
+import { Case, GameState, Character, Evidence } from '@/types/game';
 import {
   generateBaseCaseAction,
   generateSingleImageAction,
@@ -386,7 +386,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         await Promise.all(
           chunk.map(async (t) => {
             try {
-              const imageUrl = await generateSingleImageAction(t.prompt);
+              // caseId parametresini ekleyerek görselin hemen host edilmesini sağlıyoruz
+              const imageUrl = await generateSingleImageAction(t.prompt, updatedCase.id);
               if (imageUrl) t.setter(imageUrl);
             } catch (err) {
               console.error(`Görsel üretilirken hata oluştu (${t.type}):`, err);
@@ -477,13 +478,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // 2. ADIM: Sadece 2 Tane Görsel Üretelim (Test İçin)
       setLoadingMessage('Demo için ana sahne çiziliyor...');
       setGenerationProgress(30);
-      const mainImg = await generateSingleImageAction(demoCase.imagePrompt);
+      const mainImg = await generateSingleImageAction(demoCase.imagePrompt, demoCase.id);
       if (mainImg) demoCase.generatedImageUrl = mainImg;
 
       if (demoCase.victim) {
         setLoadingMessage('Demo için kurban dosyası hazırlanıyor...');
         setGenerationProgress(60);
-        const victimImg = await generateSingleImageAction(demoCase.victim.imagePrompt);
+        const victimImg = await generateSingleImageAction(demoCase.victim.imagePrompt, demoCase.id);
         if (victimImg) demoCase.victim.generatedImageUrl = victimImg;
       }
 
@@ -684,13 +685,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
         generatedImageUrl: undefined,
       };
 
+      // Client tarafında da büyük verileri temizle (Vercel Payload limit güvenliği)
+      const minimalEvidence = currentCase.evidence.map(e => ({
+        id: e.id,
+        title: e.title,
+        isHidden: e.isHidden
+      } as Evidence));
+
       const rawResponse = await interrogateSuspectAction(
         currentCase.title,
         currentCase.fullStory,
         cleanCharacter,
         question,
         history.slice(-10),
-        currentCase.evidence
+        minimalEvidence
       );
 
       let response = rawResponse;
