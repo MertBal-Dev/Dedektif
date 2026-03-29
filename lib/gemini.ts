@@ -4,7 +4,10 @@ import { Case, Character } from "@/types/game";
 // Initialize Vertex AI
 const vertexAI = new VertexAI({
   project: process.env.GCP_PROJECT_ID || "",
-  location: process.env.GCP_LOCATION || "us-central1"
+  location: process.env.GCP_LOCATION || "us-central1",
+  googleAuthOptions: process.env.GCP_SERVICE_ACCOUNT_KEY 
+    ? { credentials: JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY) }
+    : undefined
 });
 
 // Text generation models (2026 current versions)
