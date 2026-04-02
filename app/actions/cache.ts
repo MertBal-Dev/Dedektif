@@ -22,8 +22,8 @@ export async function getAvailableCaseFromCache(theme: string, playedIds: string
       .eq('theme', theme);
 
     if (validPlayedIds.length > 0) {
-      // Postgres IN operatörü TEXT dizisi ile her türlü stringi arayabilir.
-      query = query.not('id', 'in', `(${validPlayedIds.map(id => `"${id}"`).join(',')})`);
+      // Supabase `.not('id', 'in', (val1,val2))` formatı
+      query = query.not('id', 'in', `(${validPlayedIds.join(',')})`);
     }
 
     const { data, error } = await query
@@ -66,7 +66,7 @@ export async function saveNewCaseToCache(caseObject: Case): Promise<boolean> {
     const imageTasks: { url: string; name: string }[] = [];
     if (caseObject.generatedImageUrl) imageTasks.push({ url: caseObject.generatedImageUrl, name: 'main' });
     if (caseObject.victim?.generatedImageUrl) imageTasks.push({ url: caseObject.victim.generatedImageUrl, name: 'victim' });
-    
+
     caseObject.characters.forEach((char, idx) => {
       if (char.generatedImageUrl) imageTasks.push({ url: char.generatedImageUrl, name: `char_${idx}` });
     });
@@ -86,17 +86,17 @@ export async function saveNewCaseToCache(caseObject: Case): Promise<boolean> {
 
     // 2. Görselleri paralel işleyip Supabase Storage'a aktar (3'erli gruplar halinde)
     const urlMap = await uploadAllCaseImages(caseId, imageTasks);
-    
+
     // 3. Vaka objesini yeni storage URL'leri ile güncelle (Deep Copy)
     const updatedCase = JSON.parse(JSON.stringify(caseObject)) as Case;
-    
+
     if (updatedCase.generatedImageUrl && urlMap[updatedCase.generatedImageUrl]) {
       updatedCase.generatedImageUrl = urlMap[updatedCase.generatedImageUrl];
     }
     if (updatedCase.victim?.generatedImageUrl && urlMap[updatedCase.victim.generatedImageUrl]) {
       updatedCase.victim.generatedImageUrl = urlMap[updatedCase.victim.generatedImageUrl];
     }
-    
+
     updatedCase.characters.forEach((char, idx) => {
       const originalUrl = caseObject.characters[idx].generatedImageUrl;
       if (originalUrl && urlMap[originalUrl]) {
@@ -107,7 +107,7 @@ export async function saveNewCaseToCache(caseObject: Case): Promise<boolean> {
     updatedCase.evidence.forEach((ev, idx) => {
       const originalImgUrl = caseObject.evidence[idx].generatedImageUrl;
       if (originalImgUrl && urlMap[originalImgUrl]) ev.generatedImageUrl = urlMap[originalImgUrl];
-      
+
       const originalSceneUrl = caseObject.evidence[idx].sceneImageUrl;
       if (originalSceneUrl && urlMap[originalSceneUrl]) ev.sceneImageUrl = urlMap[originalSceneUrl];
     });

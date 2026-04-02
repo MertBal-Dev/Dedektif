@@ -1,155 +1,160 @@
 import { Case } from "@/types/game";
-import { VertexAI } from "@google-cloud/vertexai";
-
-const vertexAI = new VertexAI({
-  project: process.env.GCP_PROJECT_ID || "",
-  location: process.env.GCP_LOCATION || "us-central1",
-  googleAuthOptions: process.env.GCP_SERVICE_ACCOUNT_KEY 
-    ? { 
-        credentials: {
-          ...JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY),
-          private_key: JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY).private_key.replace(/\\n/g, '\n')
-        }
-      }
-    : undefined
-});
+import { GoogleAuth } from "google-auth-library";
 
 /**
- * Generates an image using Gemini's Imagen or Multimodal (Banana) models.
- * Supports both :predict (Imagen) and :generateContent (Gemini-Multimodal) endpoints.
- * Returns a base64 Data URL.
+ * Helper to delay between sequential requests.
  */
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
- * Generates an image using Gemini's Vertex AI models.
- * Returns a base64 Data URL or null.
+ * CLEANUP: Removes technical markers like [Kritik Not] or (Emoji) from the prompt
+ * so the AI doesn't render them as text.
  */
-async function generateGeminiImage(prompt: string, modelId: string): Promise<string | null> {
-  const isMultimodal = modelId.includes("gemini") || modelId.includes("banana");
-  const model = vertexAI.getGenerativeModel({ model: modelId });
-
-  try {
-    if (isMultimodal) {
-      const result = await model.generateContent({
-        contents: [{
-          role: 'user',
-          parts: [{
-            text: `Generate a high-quality, professional image: ${prompt}, hyper-realistic photography, cinematic lighting, film noir atmosphere.`
-          }]
-        }],
-        generationConfig: {
-          candidateCount: 1,
-        }
-      });
-
-      const part = result.response.candidates?.[0]?.content?.parts?.[0];
-      if (part?.inlineData?.data) {
-        console.log(`🎨 Generated image via Vertex AI Multimodal (${modelId})`);
-        return `data:${part.inlineData.mimeType || 'image/webp'};base64,${part.inlineData.data}`;
-      }
-    } else {
-      const enhancedPrompt = `${prompt}, hyper-realistic photography, 8k resolution, cinematic lighting, natural skin textures, 35mm lens, film noir atmosphere, detailed facial features`;
-      
-      const instances = [{ prompt: enhancedPrompt }];
-      const parameters = {
-        sampleCount: 1,
-        aspectRatio: "16:9",
-        outputMimeType: "image/webp"
-      };
-
-      // @ts-ignore
-      const result = await model.predict({ instances, parameters });
-      
-      const predictions = result.predictions as any[];
-      if (predictions?.[0]?.bytesBase64Encoded) {
-        console.log(`🎨 Generated image via Vertex AI Imagen (${modelId})`);
-        return `data:image/webp;base64,${predictions[0].bytesBase64Encoded}`;
-      }
-    }
-  } catch (error) {
-    console.error(`❌ Vertex AI Image generation (${modelId}) failed:`, error);
-  }
-  return null;
+function cleanImagePrompt(prompt: string): string {
+  return prompt
+    .replace(/\[.*?\]/g, "") // Removes [ text ]
+    .replace(/\(.*?\)/g, "") // Removes ( text )
+    .replace(/\"(.*?)\"/g, "$1") // Removes quotes around text
+    .replace(/scene must prominently include:/gi, "an atmospheric scene including")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
- * Generates a Pollinations image URL.
+ * Gets a fresh access token for Vertex AI REST calls.
  */
-async function generatePollinationsImage(prompt: string, useKey: boolean = true): Promise<string | null> {
+async function getAccessToken(): Promise<string | null> {
   try {
-    const fullPrompt = `${prompt}, movie still, highly detailed, dramatic lighting, detective noir atmosphere`;
-    const encodedPrompt = encodeURIComponent(fullPrompt);
-    const seed = Math.floor(Math.random() * 1000000);
-    const model = "zimage";
+    let keyStr = process.env.GCP_SERVICE_ACCOUNT_KEY || "";
+    // Strip potential wrapping quotes
+    if (keyStr.startsWith("'") && keyStr.endsWith("'")) keyStr = keyStr.slice(1, -1);
+    if (keyStr.startsWith('"') && keyStr.endsWith('"')) keyStr = keyStr.slice(1, -1);
 
-    const apiKey = useKey ? process.env.POLLINATIONS_API_KEY : null;
+    const credentials = JSON.parse(keyStr);
+    if (credentials.private_key) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
 
-    let imageUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=${model}&width=800&height=800&seed=${seed}`;
-    if (apiKey) imageUrl += `&key=${apiKey}`;
-
-    console.log(`🎨 Pollinations URL (${useKey ? 'Keyed' : 'Free'}): ${imageUrl}`);
-    return imageUrl;
-  } catch (error) {
-    console.error("❌ Pollinations URL creation failed:", error);
+    const auth = new GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
+    const client = await auth.getClient();
+    const tokenResponse = await client.getAccessToken();
+    return tokenResponse.token || null;
+  } catch (error: any) {
+    console.error("❌ Auth Token Error:", error.message);
     return null;
   }
 }
 
 /**
- * Helper to delay between sequential requests to avoid Rate Limits (429).
+ * Generates an image using Vertex AI Imagen models via Direct REST API (Predict).
  */
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+async function generateImagenImage(prompt: string, modelId: string): Promise<string | null> {
+  const token = await getAccessToken();
+  if (!token) return null;
 
-/**
- * Main image generation entry point with Multi-Model Retry logic.
- * Optimized for 2026: Min Cost, Max Quality.
- */
-export async function generateImage(prompt: string): Promise<string | null> {
-  const geminiModels = [
-    "gemini-2.5-flash-image",
-    "gemini-3.1-flash-image-preview",
-    "nano-banana-pro-preview",
-    "imagen-4.0-fast-generate-001",
-    "imagen-4.0-generate-001",
-    "gemini-3-pro-image-preview",
-    "imagen-4.0-ultra-generate-001",
-    "imagen-3.0-fast-generate-001",
-    "imagen-3.0-generate-001"
-  ];
+  const projectId = process.env.GCP_PROJECT_ID || "";
+  const location = process.env.GCP_LOCATION || "us-central1";
+  const cleanedPrompt = cleanImagePrompt(prompt);
+  
+  const predictUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predict`;
 
-  for (const modelId of geminiModels) {
-    const fullModelId = modelId.startsWith("models/") ? modelId : `models/${modelId}`;
-    const img = await generateGeminiImage(prompt, fullModelId);
-    if (img) return img;
-    await wait(300);
+  const requestBody = {
+    instances: [{
+      prompt: `${cleanedPrompt}, hyper-realistic photography, high quality, 35mm lens, cinematic lighting, 8k resolution, highly detailed texture, professional color grading`
+    }],
+    parameters: {
+      sampleCount: 1,
+      aspectRatio: "1:1",
+      outputMimeType: "image/webp"
+    }
+  };
+
+  try {
+    const response = await fetch(predictUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.predictions?.[0]?.bytesBase64Encoded) {
+      console.log(`✅ [GENERATE SUCCESS] ${modelId}`);
+      return `data:image/webp;base64,${data.predictions[0].bytesBase64Encoded}`;
+    } else {
+      const msg = data.error?.message || response.statusText || "Unknown Error";
+      console.error(`❌ [GENERATE FAIL] ${modelId}: ${msg}`);
+      return null;
+    }
+  } catch (error: any) {
+    console.error(`❌ [FETCH ERROR] ${modelId}:`, error.message);
+    return null;
   }
-
-  console.log("🔄 All Gemini models failed or hit quota. Falling back to Pollinations Keyed Tier...");
-  const keyedPollinations = await generatePollinationsImage(prompt, true);
-  if (keyedPollinations) return keyedPollinations;
-
-  console.log("⚠️ Keyed Pollinations also failed. Last resort: Pollinations FREE.");
-  return await generatePollinationsImage(prompt, false);
 }
 
-// ── YENİ: Paralel İşlem Havuzu (Chunking) YARDIMCISI ────────────────
+/**
+ * Main image generation entry point with Persistent Retry logic.
+ */
+export async function generateImage(prompt: string): Promise<string | null> {
+  const imagenModels = [
+    "imagen-4.0-ultra-generate-001",   // EN KALİTELİ (En başa aldık)
+    "imagen-4.0-generate-001",         // Yüksek Kalite
+    "imagen-4.0-fast-generate-001",    // Hızlı (Alternatif)
+    "imagen-3.0-fast-generate-001",    // Hızlı (Alternatif)
+    "imagen-3.0-capability-001"        // Yedek
+  ];
+
+  let attempts = 0;
+  const maxAttempts = 5; // Prevent infinite loops in case of global GCP outages
+
+  while (attempts < maxAttempts) {
+    for (const modelId of imagenModels) {
+      console.log(`⏳ [ATTEMPT] ${modelId} (Image: ${prompt.substring(0, 30)}...)`);
+      const img = await generateImagenImage(prompt, modelId);
+      if (img) return img;
+      
+      // Delay between model switches
+      await wait(1500);
+    }
+    
+    attempts++;
+    console.log(`📡 [RETRY] Round ${attempts} failed. All Google models hit. Waiting 3s...`);
+    await wait(3000); // Wait 3s before starting a new round of all models
+  }
+
+  // FALLBACK: If Google fails 5 whole rounds, try Pollinations
+  console.log("🔄 Persistent Google retries failed. Falling back to Pollinations...");
+  const encodedPrompt = encodeURIComponent(cleanImagePrompt(prompt));
+  return `https://gen.pollinations.ai/image/${encodedPrompt}?model=zimage&width=800&height=800&seed=${Math.floor(Math.random() * 1000000)}&key=${process.env.POLLINATIONS_API_KEY || ""}`;
+}
+
+/**
+ * Paralel İşlem Havuzu (Chunking) YARDIMCISI
+ */
 type Task = () => Promise<void>;
 
 async function processInChunks(tasks: Task[], chunkSize: number) {
   for (let i = 0; i < tasks.length; i += chunkSize) {
     const chunk = tasks.slice(i, i + chunkSize);
     await Promise.all(chunk.map(task => task()));
-    await wait(200); // Havuzlar arası ufak bir nefes
+    await wait(500); 
   }
 }
 
 /**
- * Generates images for all assets of a case in PARALLEL order with progress reporting.
+ * Generates images for all assets of a case in chunked order.
  */
 export async function generateCaseImages(
   caseData: Case,
   onProgress?: (percent: number) => void
 ): Promise<Case> {
-  console.log(`🖼️ Starting PARALLEL image generation for case: "${caseData.title}"`);
+  console.log(`🖼️ Starting PERSISTENT image generation for case: "${caseData.title}"`);
 
   const updated = { ...caseData };
   let currentStep = 0;
@@ -170,7 +175,7 @@ export async function generateCaseImages(
     }
   };
 
-  // 1. TIER 1: Ana ve Kurban Görselleri (Sıralı - Oyuna hızlı giriş için)
+  // TIER 1: Ana Kapak ve Kurban (Sıralı)
   updated.generatedImageUrl = (await generateImage(caseData.imagePrompt)) || undefined;
   updateProgress();
 
@@ -180,12 +185,12 @@ export async function generateCaseImages(
     updateProgress();
   }
 
-  // 2. TIER 2: Karakterler, Kanıtlar, Bölümler ve Bulmacalar (Paralel Havuz)
-  const backgroundTasks: Task[] = [];
+  // TIER 2: Diğerleri (Chunked Parallel)
+  const tasks: Task[] = [];
 
   if (caseData.characters) {
     caseData.characters.forEach((char, i) => {
-      backgroundTasks.push(async () => {
+      tasks.push(async () => {
         const img = await generateImage(char.imagePrompt);
         updated.characters![i].generatedImageUrl = img || undefined;
         updateProgress();
@@ -195,14 +200,13 @@ export async function generateCaseImages(
 
   if (caseData.evidence) {
     caseData.evidence.forEach((ev, i) => {
-      backgroundTasks.push(async () => {
+      tasks.push(async () => {
         const evidenceImg = await generateImage(ev.imagePrompt);
         updated.evidence![i].generatedImageUrl = evidenceImg || undefined;
         updateProgress();
       });
-
       if (ev.sceneImagePrompt) {
-        backgroundTasks.push(async () => {
+        tasks.push(async () => {
           const sceneImg = await generateImage(ev.sceneImagePrompt!);
           updated.evidence![i].sceneImageUrl = sceneImg || undefined;
           updateProgress();
@@ -213,7 +217,7 @@ export async function generateCaseImages(
 
   if (caseData.chapters) {
     caseData.chapters.forEach((chapter, i) => {
-      backgroundTasks.push(async () => {
+      tasks.push(async () => {
         const img = await generateImage(chapter.imagePrompt);
         updated.chapters![i].generatedImageUrl = img || undefined;
         updateProgress();
@@ -224,7 +228,7 @@ export async function generateCaseImages(
   if (caseData.puzzles) {
     caseData.puzzles.forEach((puzzle, i) => {
       if (puzzle.imagePrompt) {
-        backgroundTasks.push(async () => {
+        tasks.push(async () => {
           const img = await generateImage(puzzle.imagePrompt!);
           updated.puzzles![i].generatedImageUrl = img || undefined;
           updateProgress();
@@ -233,10 +237,10 @@ export async function generateCaseImages(
     });
   }
 
-  console.log(`🚀 Processing ${backgroundTasks.length} secondary images in parallel chunks of 3...`);
-  await processInChunks(backgroundTasks, 3);
+  // 2'şerli gruplar halinde (RPM koruması için)
+  await processInChunks(tasks, 2);
 
   if (onProgress) onProgress(100);
-  console.log(`✅ All images for case "${caseData.title}" have been successfully generated.`);
+  console.log(`✅ All persistent images for case "${caseData.title}" have been generated.`);
   return updated;
 }

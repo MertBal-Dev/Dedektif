@@ -533,7 +533,13 @@ export default function GameView({ caseData }: { caseData: Case }) {
                     if (result.isCorrect) showNotification('success', 'Bulmaca çözüldü! Yeni kanıt açıldı. +puan');
                     return result;
                   }}
-                  onHint={(id) => { const h = useHint(id); if (h) showNotification('info', `İpucu alındı (-50p)`); return h; }}
+                  onHint={(id) => {
+                    const level = (gameState.hintProgress?.[id] || 0) + 1;
+                    const cost = level === 1 ? 50 : level === 2 ? 75 : 100;
+                    const h = useHint(id);
+                    if (h) showNotification('info', `${level}. ipucu alındı (-${cost}p)`);
+                    return h;
+                  }}
                   onImageClick={(src, alt) => setLightbox({ src, alt })}
                   foundEvidenceIds={gameState.foundEvidenceIds}
                   allEvidence={caseData.evidence}
@@ -1080,7 +1086,7 @@ function SuspectsBoard({ characters, suspicionLevels, onInterrogate, onAccuse, o
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-base font-serif text-white leading-tight mb-0.5">{char.name}</h4>
-                  <p className="text-[10px] text-accent uppercase font-bold tracking-tighter mb-2">{char.role}</p>
+                  <p className="text-[10px] text-accent uppercase font-bold tracking-tighter mb-2">ŞÜPHELİ</p>
                   <div className="space-y-0.5 text-[9px] text-gray-500">
                     <div className="flex items-center gap-1"><Briefcase size={8} /><span>{char.profession}</span></div>
                     <div className="flex items-center gap-1"><MapPin size={8} /><span className="truncate">{char.address}</span></div>
@@ -1148,10 +1154,10 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles }:
   evidence: Evidence[]; foundIds: string[]; onFind: (id: string) => void; onImageClick: (s: string, a: string) => void;
   allPuzzles?: Puzzle[];
 }) {
-  const [searchMode, setSearchMode] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [searching, setSearching] = useState<string | null>(null);
   const [activeInteractiveEvidence, setActiveInteractiveEvidence] = useState<Evidence | null>(null);
+  const [viewMode, setViewMode] = useState<'scan' | 'found'>('scan');
 
   const handleSearch = (id: string) => {
     const target = evidence.find(e => e.id === id);
@@ -1164,65 +1170,195 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles }:
   const found = evidence.filter(e => foundIds.includes(e.id));
   const unfound = evidence.filter(e => !foundIds.includes(e.id));
 
-  // Sadece saha taramasıyla (interactive scene) bulunabilecek olanları filtrele
+  // Saha taramasıyla bulunabilecek kanıtlar (interaktif sahne barındıranlar)
   const searchableEvidence = unfound.filter(item =>
     !item.isHidden &&
     !allPuzzles?.some(p => p.unlocksEvidenceId === item.id) &&
     item.interactiveObjects && item.interactiveObjects.length > 0
   );
 
+  // Görsel için: sceneImageUrl önce, yoksa generatedImageUrl, yoksa null
+  const getSceneImage = (ev: Evidence) => ev.sceneImageUrl || ev.generatedImageUrl || null;
+
   return (
-    <div className="space-y-7">
-      <div className="flex justify-between items-end border-b border-white/10 pb-5">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-end justify-between border-b border-white/10 pb-5">
         <div>
           <h3 className="text-2xl sm:text-3xl font-serif text-white">Soruşturma Panosu</h3>
-          <p className="text-gray-500 text-sm mt-1">{foundIds.length} / ? kanıt bulundu</p>
+          <p className="text-gray-500 text-sm mt-1">
+            <span className="text-accent font-mono font-bold">{foundIds.length}</span>
+            <span className="text-gray-600"> kanıt dosyaya eklendi</span>
+          </p>
         </div>
-        <button
-          onClick={() => setSearchMode(!searchMode)}
-          className={cn("px-4 py-2 rounded-lg text-[9px] uppercase font-bold tracking-widest border flex items-center gap-2 transition-all",
-            searchMode ? "bg-primary/20 border-primary/50 text-primary" : "bg-white/5 border-white/10 text-gray-500 hover:text-white")}
-        >
-          <ScanSearch size={13} />{searchMode ? 'Panoya Dön' : 'Olay Yerini Tara'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewMode('scan')}
+            className={cn(
+              "px-3 sm:px-4 py-2 rounded-lg text-[9px] uppercase font-bold tracking-widest border flex items-center gap-1.5 transition-all",
+              viewMode === 'scan' ? "bg-primary/20 border-primary/50 text-primary" : "bg-white/5 border-white/10 text-gray-500 hover:text-white"
+            )}
+          >
+            <ScanSearch size={12} />
+            <span className="hidden sm:inline">Olay Yeri</span>
+          </button>
+          {found.length > 0 && (
+            <button
+              onClick={() => setViewMode('found')}
+              className={cn(
+                "px-3 sm:px-4 py-2 rounded-lg text-[9px] uppercase font-bold tracking-widest border flex items-center gap-1.5 transition-all",
+                viewMode === 'found' ? "bg-accent/20 border-accent/50 text-accent" : "bg-white/5 border-white/10 text-gray-500 hover:text-white"
+              )}
+            >
+              <Fingerprint size={12} />
+              <span className="hidden sm:inline">Kanıtlar</span>
+              <span className="bg-accent/20 text-accent text-[8px] px-1.5 py-0.5 rounded-full font-mono">{found.length}</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Search mode */}
-      <AnimatePresence>
-        {searchMode && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <div className="bg-black/40 border border-white/8 rounded-2xl p-6">
-              <p className="text-[9px] uppercase tracking-widest text-accent font-bold flex items-center gap-2 mb-5">
-                <MapPin size={11} /> Arama Bölgeleri — Bir konum seçin
-              </p>
-              {unfound.length === 0 ? (
-                <p className="text-accent text-sm text-center py-6 font-serif italic font-bold tracking-widest uppercase">Tebrikler, tüm kanıtlar bulundu!</p>
-              ) : searchableEvidence.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-6 font-serif italic">Şu an aranabilir bölge yok. Şüphelileri sorgulayın veya bulmacaları çözün.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                  {searchableEvidence.map(item => (
-                    <button key={item.id} onClick={() => handleSearch(item.id)} disabled={!!searching}
-                      className={cn("p-4 rounded-xl border text-left transition-all",
-                        searching === item.id ? "border-accent/50 bg-accent/5 animate-pulse" : "border-white/10 bg-white/3 hover:bg-white/8 hover:border-white/25"
-                      )}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Search size={12} className="text-gray-500" />
-                        <span className="text-[10px] font-bold text-gray-200 uppercase tracking-wider">{item.location}</span>
-                      </div>
-                      <p className="text-[10px] text-gray-500 leading-relaxed">{item.locationDescription || 'Bu konumu dikkatlice inceleyin...'}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
+      {/* ── OLAY YERİ TARAMA EKRANI (default) ── */}
+      <AnimatePresence mode="wait">
+        {viewMode === 'scan' && (
+          <motion.div
+            key="scan"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-5"
+          >
+            {/* Üst banner */}
+            <div className="flex items-center gap-3 p-4 bg-black/40 rounded-xl border border-white/8">
+              <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                <MapPin size={14} className="text-primary" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Aktif Araştırma Bölgeleri</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  {searchableEvidence.length === 0
+                    ? unfound.length === 0
+                      ? 'Tüm bölgeler tarandı. Kanıtlar sekmesine geç.'
+                      : 'Sorgu odası veya bulmacalar üzerinden yeni bölgeler açılabilir.'
+                    : `${searchableEvidence.length} bölge incelemeyi bekliyor — görsele tıklayarak sahneye gir`}
+                </p>
+              </div>
             </div>
-            {/* Interactive Scene Modal for searching */}
+
+            {/* Olay Yeri Kartları */}
+            {searchableEvidence.length === 0 ? (
+              <div className="py-16 flex flex-col items-center gap-4 text-center">
+                {unfound.length === 0 ? (
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center">
+                      <CheckCircle2 size={28} className="text-accent" />
+                    </div>
+                    <p className="text-accent font-serif italic text-lg">Tüm kanıtlar bulundu!</p>
+                    <p className="text-gray-600 text-sm">Artık suçlamaya hazırsın.</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                      <Lock size={26} className="text-gray-600" />
+                    </div>
+                    <p className="text-gray-400 font-serif italic">Gizli bölgeler kilitli</p>
+                    <p className="text-gray-600 text-sm max-w-xs">Şüphelileri sorgula veya bulmacaları çöz — yeni arama bölgeleri açılır.</p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {searchableEvidence.map((item, idx) => {
+                  const sceneImg = getSceneImage(item);
+                  const isSearching = searching === item.id;
+
+                  return (
+                    <motion.button
+                      key={item.id}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.07 }}
+                      onClick={() => !searching && handleSearch(item.id)}
+                      disabled={!!searching}
+                      className={cn(
+                        "group relative rounded-2xl overflow-hidden border text-left transition-all duration-300",
+                        isSearching
+                          ? "border-primary/60 shadow-[0_0_30px_rgba(139,0,0,0.3)] animate-pulse"
+                          : "border-white/10 hover:border-white/30 hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)]"
+                      )}
+                      style={{ minHeight: 180 }}
+                    >
+                      {/* Arka plan görseli */}
+                      <div className="absolute inset-0">
+                        {sceneImg ? (
+                          <img
+                            src={sceneImg}
+                            alt={item.location}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
+                        )}
+                        {/* Gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
+                        {/* Hover scan effect */}
+                        <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-colors duration-300" />
+                      </div>
+
+                      {/* Üst sağ köşe: "Tara" rozeti */}
+                      <div className="absolute top-3 right-3 z-10">
+                        <div className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-bold uppercase tracking-wider transition-all",
+                          isSearching
+                            ? "bg-primary/30 border-primary/60 text-primary"
+                            : "bg-black/60 border-white/15 text-white/60 group-hover:bg-primary/20 group-hover:border-primary/40 group-hover:text-primary"
+                        )}>
+                          {isSearching ? (
+                            <><Loader2 size={9} className="animate-spin" /> Taranıyor</>
+                          ) : (
+                            <><ScanSearch size={9} /> Sahneye Gir</>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Üst sol köşe: gizem rozeti */}
+                      <div className="absolute top-3 left-3 z-10">
+                        <div className="flex items-center gap-1 bg-black/60 border border-white/10 px-2 py-1 rounded-full">
+                          <Search size={9} className="text-gray-500" />
+                          <span className="text-[9px] text-gray-500 font-mono">İncelenmedi</span>
+                        </div>
+                      </div>
+
+                      {/* Alt içerik */}
+                      <div className="relative z-10 p-4 pt-12">
+                        <div className="flex items-end justify-between gap-2">
+                          <div>
+                            <p className="text-[9px] uppercase tracking-widest text-primary/80 font-bold mb-1">Arama Bölgesi</p>
+                            <h4 className="text-base sm:text-lg font-serif text-white leading-tight">{item.location}</h4>
+                            {item.locationDescription && (
+                              <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">
+                                {item.locationDescription}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Interactive Scene Modal */}
             <AnimatePresence>
               {activeInteractiveEvidence && (
                 <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-0 sm:p-4 backdrop-blur-sm overflow-y-auto">
-                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-                    className="max-w-4xl w-full border-0 sm:border border-white/10 sm:rounded-2xl overflow-hidden shadow-2xl bg-black h-full sm:h-auto max-h-[100svh] sm:max-h-[85vh]">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="max-w-4xl w-full border-0 sm:border border-white/10 sm:rounded-2xl overflow-hidden shadow-2xl bg-black h-full sm:h-auto max-h-[100svh] sm:max-h-[85vh]"
+                  >
                     <InteractiveScene
                       evidence={activeInteractiveEvidence}
                       onClose={() => { setActiveInteractiveEvidence(null); setSearching(null); }}
@@ -1233,30 +1369,40 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles }:
             </AnimatePresence>
           </motion.div>
         )}
+
+        {/* ── BULUNAN KANITLAR EKRANI ── */}
+        {viewMode === 'found' && (
+          <motion.div
+            key="found"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            {found.length === 0 ? (
+              <div className="py-16 flex flex-col items-center gap-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                  <Search size={26} className="text-gray-600" />
+                </div>
+                <p className="text-gray-500 font-serif italic">Henüz kanıt bulunamadı.</p>
+                <p className="text-gray-600 text-sm">Olay Yeri sekmesinden aramaya başla.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {found.map(item => (
+                  <EvidenceCard
+                    key={item.id}
+                    evidence={item}
+                    isFound
+                    onClick={() => setSelectedEvidence(item)}
+                    onImageClick={onImageClick}
+                    allPuzzles={allPuzzles}
+                  />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
       </AnimatePresence>
-
-      {/* Found evidence */}
-      {found.length > 0 && (
-        <div>
-          <p className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-4">Bulunan Kanıtlar</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {found.map(item => (
-              <EvidenceCard key={item.id} evidence={item} isFound onImageClick={onImageClick}
-                onClick={() => setSelectedEvidence(item)} allPuzzles={allPuzzles} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Unfound */}
-      {unfound.length > 0 && (
-        <div>
-          <p className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-4">Henüz Bulunamadı</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {unfound.map(item => <EvidenceCard key={item.id} evidence={item} isFound={false} onImageClick={onImageClick} allPuzzles={allPuzzles} />)}
-          </div>
-        </div>
-      )}
 
       {/* Evidence detail modal */}
       <AnimatePresence>
@@ -1560,7 +1706,9 @@ function PuzzleCard({ puzzle, isSolved, onSolve, onHint, onImageClick, linkedEvi
           >
             <Sparkles size={14} className="text-accent flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-[9px] text-accent font-bold uppercase tracking-widest mb-1.5">İpucu (-50p)</p>
+              <p className="text-[9px] text-accent font-bold uppercase tracking-widest mb-1.5">
+                İpucu — Tekrar sor daha fazlasını öğren
+              </p>
               <p className="text-[13px] text-gray-300 italic font-serif leading-relaxed">"{hint}"</p>
             </div>
           </motion.div>
@@ -1822,7 +1970,7 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
               <div className="absolute bottom-4 left-0 right-0 text-center px-4">
                 <h3 className="text-lg xl:text-xl font-serif text-white drop-shadow-lg">{character.name}</h3>
-                <p className="text-[10px] text-accent/80 uppercase font-bold tracking-wider mt-1">{character.role}</p>
+                <p className="text-[10px] text-accent/80 uppercase font-bold tracking-wider mt-1">ŞÜPHELİ</p>
               </div>
               <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 bg-black/60 p-1.5 rounded-full border border-white/10 transition-opacity">
                 <ScanSearch size={12} className="text-white/70" />
@@ -1868,7 +2016,7 @@ function InterrogationRoom({ character, caseData, history, onClose, onInterrogat
 
           <div className="flex-1 min-w-0">
             <p className="text-white font-serif text-sm truncate">{character.name}</p>
-            <p className="text-[10px] text-accent/70 uppercase tracking-wider truncate">{character.role}</p>
+            <p className="text-[10px] text-accent/70 uppercase tracking-wider truncate">ŞÜPHELİ</p>
           </div>
 
           {/* Bilgi aç/kapat */}
@@ -2162,7 +2310,7 @@ function DeductionModal({
             </div>
             <div>
               <h3 className="text-lg font-serif text-white">{suspect.name}</h3>
-              <p className="text-[10px] text-gray-500">{suspect.role}</p>
+              <p className="text-[10px] text-gray-500">ŞÜPHELİ</p>
             </div>
             <div className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-full">
               <AlertTriangle size={11} className="text-primary" />

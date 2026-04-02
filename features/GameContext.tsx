@@ -27,6 +27,7 @@ const INITIAL_GAME_STATE: GameState = {
   discoveredChapterIds: [],
   revealedObjectIds: [],
   puzzleAttempts: {},
+  hintProgress: {},
 };
 
 interface GameContextType {
@@ -212,6 +213,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           ...parsedState,
           revealedObjectIds: parsedState.revealedObjectIds || [],
           puzzleAttempts: parsedState.puzzleAttempts || {},
+          hintProgress: parsedState.hintProgress || {},
         });
         setCurrentCase(normalizeCase(savedCase));
         setHasSavedGame(true);
@@ -273,16 +275,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // ── GİZLİ ADIM: CACHE KONTROLÜ (Maliyet Dostu) ──────────────────────────────
     try {
       const selectedTheme = theme || "Karma Vakalar";
-      const cachedCase = await getAvailableCaseFromCache(selectedTheme, playedCaseIds);
       
+      // Mevcut vakayı ve daha önce oynananları hariç tut
+      const excludeIds = currentCase?.id 
+        ? Array.from(new Set([...playedCaseIds, currentCase.id]))
+        : playedCaseIds;
+
+      const cachedCase = await getAvailableCaseFromCache(selectedTheme, excludeIds);
+
       if (cachedCase) {
         setGenerationProgress(50);
         setLoadingMessage('Arşivden vaka dosyası getiriliyor...');
-        
+
         // Simüle edilmiş bir bekleme (anında açılmasın, hissiyat için)
         await new Promise(resolve => setTimeout(resolve, 1500));
-        
+
         setCurrentCase(normalizeCase(cachedCase));
+        
+        // ── CACHE: Görülen vakayı hemen listeye ekle (Döngüyü kırmak için) ──
+        setPlayedCaseIds(prev => {
+          const updated = Array.from(new Set([...prev, cachedCase.id]));
+          localStorage.setItem('dedektif_played_cases_v2', JSON.stringify(updated));
+          return updated;
+        });
+
         setGameState({
           ...INITIAL_GAME_STATE,
           currentCaseId: cachedCase.id,
@@ -291,6 +307,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           discoveredChapterIds: cachedCase.chapters?.filter((ch: any) => ch.isUnlocked).map((ch: any) => ch.id) || [],
           revealedObjectIds: [],
           puzzleAttempts: {},
+          hintProgress: {},
         });
         setGenerationProgress(100);
         setIsLoading(false);
@@ -398,7 +415,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       setGenerationProgress(98);
       setLoadingMessage('Vaka arşive kaydediliyor...');
-      
+
       // ── YENİ ADIM: ÜRETİLEN VAKAYI CACHE'E KAYDET ─────────────────────────────
       try {
         await saveNewCaseToCache(updatedCase);
@@ -409,6 +426,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       // 4. ADIM: State Güncelle ve Başlat
       setCurrentCase(updatedCase);
+      
+      // ── CACHE: Yeni üretilen vakayı hemen görüldü listesine ekle ──
+      setPlayedCaseIds(prev => {
+        const updated = Array.from(new Set([...prev, updatedCase.id]));
+        localStorage.setItem('dedektif_played_cases_v2', JSON.stringify(updated));
+        return updated;
+      });
+
       setGameState({
         ...INITIAL_GAME_STATE,
         currentCaseId: updatedCase.id,
@@ -417,6 +442,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         discoveredChapterIds: updatedCase.chapters?.filter((ch: any) => ch.isUnlocked).map((ch: any) => ch.id) || [],
         revealedObjectIds: [],
         puzzleAttempts: {},
+        hintProgress: {},
       });
 
       setGenerationProgress(100);
@@ -428,7 +454,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [gameState.solvedCaseIds, playedCaseIds, showNotification]);
+  }, [gameState.solvedCaseIds, playedCaseIds, currentCase?.id, showNotification]);
 
   const startDemoCase = useCallback(async () => {
     setIsLoading(true);
@@ -440,14 +466,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
     try {
       const demoTheme = MOCK_CASE.theme; // Noir / 1950'ler
       const cachedDemo = await getAvailableCaseFromCache(demoTheme, playedCaseIds);
-      
+
       if (cachedDemo) {
         setGenerationProgress(70);
         setLoadingMessage('Demo dosyası arşivden çıkarılıyor...');
-        
+
         await new Promise(resolve => setTimeout(resolve, 800));
-        
+
         setCurrentCase(normalizeCase(cachedDemo));
+        
+        // ── CACHE: Demo vakayı da görüldü olarak işaretle ──
+        setPlayedCaseIds(prev => {
+          const updated = Array.from(new Set([...prev, cachedDemo.id]));
+          localStorage.setItem('dedektif_played_cases_v2', JSON.stringify(updated));
+          return updated;
+        });
+
         setGameState({
           ...INITIAL_GAME_STATE,
           currentCaseId: cachedDemo.id,
@@ -457,7 +491,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           revealedObjectIds: [],
           puzzleAttempts: {},
         });
-        
+
         setGenerationProgress(100);
         setIsLoading(false);
         showNotification('info', 'Arşivdeki demo vaka dosyası başarıyla açıldı.');
@@ -471,7 +505,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     try {
       // 1. ADIM: Demo Veriyi Al (Dümenden :))
       const demoCase = JSON.parse(JSON.stringify(MOCK_CASE)) as Case;
-      
+
       // CRITICAL FIX: UUID Format (Postgres için gerçek UUID olmalı)
       demoCase.id = crypto.randomUUID();
 
@@ -495,13 +529,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       // 4. ADIM: Başlat
       setCurrentCase(demoCase);
+      
+      // ── CACHE: Yeni üretilen demo vakayı görüldü olarak işaretle ──
+      setPlayedCaseIds(prev => {
+        const updated = Array.from(new Set([...prev, demoCase.id]));
+        localStorage.setItem('dedektif_played_cases_v2', JSON.stringify(updated));
+        return updated;
+      });
+
       setGameState({
         ...INITIAL_GAME_STATE,
         currentCaseId: demoCase.id,
         timeStarted: new Date().toISOString(),
         discoveredChapterIds: demoCase.chapters.filter(ch => ch.isUnlocked).map(ch => ch.id),
       });
-      
+
       setGenerationProgress(100);
       setIsLoading(false);
       showNotification('success', 'Demo vaka ve 2 özel görsel hazır! Supabase kontrol edilebilir.');
@@ -632,11 +674,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
           puzzles: prev.puzzles.map(p => p.id === puzzleId ? { ...p, isSolved: true } : p),
         } : prev);
 
-        setGameState(prev => ({
-          ...prev,
-          unlockedClueIds: [...prev.unlockedClueIds, puzzleId],
-          score: prev.score + (puzzle.points || 200),
-        }));
+        setGameState(prev => {
+          // Çözülen bulmacaya ait hintProgress sıfırla
+          const updatedHintProgress = { ...prev.hintProgress };
+          delete updatedHintProgress[puzzleId];
+          return {
+            ...prev,
+            unlockedClueIds: [...prev.unlockedClueIds, puzzleId],
+            score: prev.score + (puzzle.points || 200),
+            hintProgress: updatedHintProgress,
+          };
+        });
 
         if (puzzle.unlocksEvidenceId) {
           findEvidence(puzzle.unlocksEvidenceId);
@@ -651,11 +699,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
           ...prev,
           puzzles: prev.puzzles.map(p => p.id === puzzleId ? { ...p, isSolved: true } : p),
         } : prev);
-        setGameState(prev => ({
-          ...prev,
-          unlockedClueIds: [...prev.unlockedClueIds, puzzleId],
-          score: prev.score + (puzzle.points || 200),
-        }));
+        setGameState(prev => {
+          const updatedHintProgress = { ...prev.hintProgress };
+          delete updatedHintProgress[puzzleId];
+          return {
+            ...prev,
+            unlockedClueIds: [...prev.unlockedClueIds, puzzleId],
+            score: prev.score + (puzzle.points || 200),
+            hintProgress: updatedHintProgress,
+          };
+        });
         if (puzzle.unlocksEvidenceId) findEvidence(puzzle.unlocksEvidenceId);
       }
       return {
@@ -758,14 +811,40 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const puzzle = currentCase.puzzles.find(p => p.id === puzzleId);
     if (!puzzle) return null;
 
+    // Kaç kez ipucu istendi bu bulmaca için?
+    const currentLevel = (gameState.hintProgress[puzzleId] || 0) + 1;
+
+    // Puan maliyeti: ilk ipucu -50, sonrakiler -75, 3. ve sonrası -100
+    const costMap: Record<number, number> = { 1: 50, 2: 75 };
+    const cost = costMap[currentLevel] ?? 100;
+
     setGameState(prev => ({
       ...prev,
       hintsUsed: prev.hintsUsed + 1,
-      score: Math.max(0, prev.score - 50),
+      score: Math.max(0, prev.score - cost),
+      hintProgress: { ...prev.hintProgress, [puzzleId]: currentLevel },
     }));
 
-    return puzzle.hint;
-  }, [currentCase]);
+    // Kademeli ipucu metni
+    if (currentLevel === 1) {
+      // 1. İpucu: Yüzeysel yönlendirici
+      const half = Math.ceil(puzzle.hint.length / 2);
+      const surface = puzzle.hint.slice(0, half);
+      return `${surface}… (Daha fazlası için tekrar sor)`;
+    } else if (currentLevel === 2) {
+      // 2. İpucu: Tam ipucu + kanal bilgisi
+      const channel = puzzle.type === 'logic' || puzzle.type === 'riddle'
+        ? 'Şüphelileri sorgulayarak veya kanıtları inceleyerek'
+        : 'Bulmacayı dikkatlice okuyarak';
+      return `${puzzle.hint} — ${channel} bu bilgiye ulaşabilirsin.`;
+    } else {
+      // 3. İpucu+: Neredeyse cevabı veren "kopya" seviyesi
+      const answerPreview = puzzle.answer.length > 4
+        ? puzzle.answer.slice(0, 2) + '*'.repeat(puzzle.answer.length - 2)
+        : '*'.repeat(puzzle.answer.length);
+      return `Son ipucu: ${puzzle.hint} Cevap şu formatta: "${answerPreview}" — ${puzzle.answer.length} karakter.`;
+    }
+  }, [currentCase, gameState.hintProgress]);
 
   const makeAccusation = useCallback(async (characterId: string, evidenceIds: string[]) => {
     if (!currentCase) return { correct: false, message: 'Vaka yok.' };
@@ -827,6 +906,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
   } => {
     if (!currentCase) return { type: 'none', message: 'Aktif bir soruşturma yok.' };
 
+    // Genel smart hint için ayrı bir progress key kullan: "smart_hint_global"
+    const SMART_KEY = 'smart_hint_global';
+    const currentLevel = (gameState.hintProgress[SMART_KEY] || 0) + 1;
+    const cost = currentLevel === 1 ? 50 : currentLevel === 2 ? 75 : 100;
+
+    const updateHintState = () => {
+      setGameState(prev => ({
+        ...prev,
+        hintsUsed: prev.hintsUsed + 1,
+        score: Math.max(0, prev.score - cost),
+        hintProgress: { ...prev.hintProgress, [SMART_KEY]: currentLevel },
+      }));
+    };
+
     // 1. Öncelik: Taranmamış sahne içeren, bulunamamış, gizli olmayan kanıt var mı?
     const unscannedSceneEvidence = currentCase.evidence.find(ev =>
       !ev.isFound &&
@@ -835,23 +928,51 @@ export function GameProvider({ children }: { children: ReactNode }) {
       !currentCase.puzzles.some(p => p.unlocksEvidenceId === ev.id && !p.isSolved)
     );
     if (unscannedSceneEvidence) {
-      setGameState(prev => ({ ...prev, hintsUsed: prev.hintsUsed + 1, score: Math.max(0, prev.score - 75) }));
-      return {
-        type: 'scene',
-        message: `Olay yerinin her köşesini iyi incelemedin. ${unscannedSceneEvidence.location} bölgesinde henüz keşfedilmemiş izler olabilir.`,
-        targetId: unscannedSceneEvidence.id,
-      };
+      updateHintState();
+      if (currentLevel === 1) {
+        return {
+          type: 'scene',
+          message: `Olay yerinin bazı köşeleri hâlâ incelenmedi. Belki bir şeyler gözden kaçırdın.`,
+          targetId: unscannedSceneEvidence.id,
+        };
+      } else if (currentLevel === 2) {
+        return {
+          type: 'scene',
+          message: `${unscannedSceneEvidence.location} bölgesinde henüz keşfedilmemiş izler var. Sahneye gir ve her nesneyi tıkla.`,
+          targetId: unscannedSceneEvidence.id,
+        };
+      } else {
+        return {
+          type: 'scene',
+          message: `"${unscannedSceneEvidence.location}" sahnesine gir — özellikle ${unscannedSceneEvidence.interactiveObjects?.[0]?.label || 'dikkat çekici nesneleri'} incele.`,
+          targetId: unscannedSceneEvidence.id,
+        };
+      }
     }
 
     // 2. Öncelik: Çözülmemiş bulmaca var mı?
     const unsolvedPuzzle = currentCase.puzzles.find(p => !p.isSolved);
     if (unsolvedPuzzle) {
-      setGameState(prev => ({ ...prev, hintsUsed: prev.hintsUsed + 1, score: Math.max(0, prev.score - 75) }));
-      return {
-        type: 'puzzle',
-        message: `"${unsolvedPuzzle.title}" bulmacası seni bekliyor. Çözersen yeni bir kanıta ulaşabilirsin.`,
-        targetId: unsolvedPuzzle.id,
-      };
+      updateHintState();
+      if (currentLevel === 1) {
+        return {
+          type: 'puzzle',
+          message: `Bulmacalar sekmesinde bekleyen bir şey var. Belki oraya bakmalısın.`,
+          targetId: unsolvedPuzzle.id,
+        };
+      } else if (currentLevel === 2) {
+        return {
+          type: 'puzzle',
+          message: `"${unsolvedPuzzle.title}" bulmacası henüz çözülmedi. Çözersen yeni bir kanıta ulaşabilirsin.`,
+          targetId: unsolvedPuzzle.id,
+        };
+      } else {
+        return {
+          type: 'puzzle',
+          message: `"${unsolvedPuzzle.title}" — Tip: ${unsolvedPuzzle.type}. İpucu al butonunu kullanmayı dene.`,
+          targetId: unsolvedPuzzle.id,
+        };
+      }
     }
 
     // 3. Öncelik: Az sorgulanmış şüpheli var mı?
@@ -860,21 +981,35 @@ export function GameProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => a.count - b.count)[0];
 
     if (leastInterrogated && leastInterrogated.count < 3) {
-      setGameState(prev => ({ ...prev, hintsUsed: prev.hintsUsed + 1, score: Math.max(0, prev.score - 75) }));
-      return {
-        type: 'interrogation',
-        message: `${leastInterrogated.char.name} ile yeterince konuşmadın. Onun tutumunu ve alibisini daha derinlemesine sorgulamaya ne dersin?`,
-        targetId: leastInterrogated.char.id,
-      };
+      updateHintState();
+      if (currentLevel === 1) {
+        return {
+          type: 'interrogation',
+          message: `Bazı şüphelilerle yeterince konuşulmadı. Sorgu odası kritik bilgiler içerebilir.`,
+          targetId: leastInterrogated.char.id,
+        };
+      } else if (currentLevel === 2) {
+        return {
+          type: 'interrogation',
+          message: `${leastInterrogated.char.name} ile daha fazla konuşman gerekiyor. Alibisini ve motifini daha derinlemesine sorgula.`,
+          targetId: leastInterrogated.char.id,
+        };
+      } else {
+        return {
+          type: 'interrogation',
+          message: `${leastInterrogated.char.name} — "${leastInterrogated.char.motive ? 'motifleri' : 'alibisi'}" hakkında doğrudan sorular sor. Köşeye sıkıştırırsan ağzından bir şeyler kaçırabilir.`,
+          targetId: leastInterrogated.char.id,
+        };
+      }
     }
 
-    // 4. Hiçbiri yoksa: Genel yönlendirme
-    setGameState(prev => ({ ...prev, hintsUsed: prev.hintsUsed + 1, score: Math.max(0, prev.score - 75) }));
+    // 4. Genel yönlendirme
+    updateHintState();
     return {
       type: 'interrogation',
-      message: 'Tüm fiziksel kanıtları topladın gibi görünüyor. Şüphelilerden birinin sorgusunda henüz sorulmamış bir soru gizlenmiş olabilir. Motifleri ve alibilerini çapraz karşılaştır.',
+      message: 'Tüm fiziksel kanıtları topladın gibi görünüyor. Şüphelilerin çapraz ifadelerini karşılaştır — biri yalan söylüyor.',
     };
-  }, [currentCase, gameState.interrogationHistory]);
+  }, [currentCase, gameState.interrogationHistory, gameState.hintProgress]);
 
   const exitCase = useCallback(async () => {
     setCurrentCase(null);
@@ -885,6 +1020,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const clearStorage = useCallback(async () => {
     await clearCaseFromDB();
     localStorage.removeItem('dedektif_game_state_v2');
+    localStorage.removeItem('dedektif_played_cases_v2'); // Oynananları da temizle
+    setPlayedCaseIds([]);
     setHasSavedGame(false);
   }, []);
 

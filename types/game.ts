@@ -120,6 +120,8 @@ export interface GameState {
   notebookEntries: string[];
   discoveredChapterIds: string[];
   puzzleAttempts: Record<string, number>;
-  // ── YENİ: İnteraktif nesne takibi ────────────────────────────────────────
+  // ── İnteraktif nesne takibi ────────────────────────────────────────────
   revealedObjectIds: string[]; // "evidenceId:objectId" formatında
+  // ── Kademeli İpucu takibi ──────────────────────────────────────────────
+  hintProgress: Record<string, number>; // key: puzzleId, value: kaç kez ipucu istendi
 }

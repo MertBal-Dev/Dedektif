@@ -9,12 +9,12 @@ import { Case, Puzzle } from '@/types/game';
  */
 export async function generateBaseCaseAction(theme?: string): Promise<Case> {
   const themes = [
-    "Noir Gerilim - Boğaz Yalısı",
-    "Osmanlı Dönemi Gizemi",
-    "1950'ler İstanbul Dedektifi",
-    "Modern Teknoloji Cinayeti",
-    "Sanat Galerisi Katliamı",
-    "Konak Ailesi Dramı",
+    "Noir Gerilim",
+    "Osmanlı Gizemi",
+    "1950'ler İstanbul",
+    "Modern Gerilim",
+    "Sanat Dünyası",
+    "Konak Dramı",
   ];
 
   const selectedTheme = theme || themes[Math.floor(Math.random() * themes.length)];

@@ -5,323 +5,414 @@ import { Case, Character } from "@/types/game";
 const vertexAI = new VertexAI({
   project: process.env.GCP_PROJECT_ID || "",
   location: process.env.GCP_LOCATION || "us-central1",
-  googleAuthOptions: process.env.GCP_SERVICE_ACCOUNT_KEY 
-    ? { 
-        credentials: {
-          ...JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY),
-          private_key: JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY).private_key.replace(/\\n/g, '\n')
-        }
+  googleAuthOptions: process.env.GCP_SERVICE_ACCOUNT_KEY
+    ? {
+      credentials: {
+        ...JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY),
+        private_key: JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY).private_key.replace(/\\n/g, '\n')
       }
+    }
     : undefined
 });
 
-// Text generation models (2026 current versions)
-const MODEL_NAME = "gemini-2.5-flash";           // Vaka üretimi (kalite öncelikli)
-const MODEL_LITE_NAME = "gemini-2.5-flash-lite"; // Bulmaca & Sorgulama (hız öncelikli)
+const MODEL_NAME = "gemini-2.5-flash";
+const MODEL_LITE_NAME = "gemini-2.5-flash-lite";
 
-const textModel = vertexAI.getGenerativeModel({ model: MODEL_NAME });   // Sadece generateNewCase kullanır
-const liteModel = vertexAI.getGenerativeModel({ model: MODEL_LITE_NAME }); // İlk tercih: bulmaca & sorgulama
+const textModel = vertexAI.getGenerativeModel({ model: MODEL_NAME });
+const liteModel = vertexAI.getGenerativeModel({ model: MODEL_LITE_NAME });
 
+// =============================================================================
+//  CASE GENERATION SYSTEM PROMPT
+// =============================================================================
 const CASE_SYSTEM_PROMPT = `
-Sen dünya klasmanında bir polisiye hikaye yazarı ve oyun tasarımcısısın. Agatha Christie ve Raymond Chandler'ın ustalığını taşıyan, derin psikolojik karakterler ve zekice bulmacalar yaratan bir ustasın.
+Sen dunya klasmaninda bir polisiye hikaye yazari ve oyun tasarimcisissin.
+Referanslarin: Agatha Christie'nin kapali cevre mantigi, Arthur Conan Doyle'un gozlem detayi,
+Raymond Chandler'in noir dili, Donna Tartt'in psikolojik derinligi ve Ahmet Umit'in Istanbul'u.
 
-Kullanıcıya Next.js tabanlı bir dedektiflik oyunu için JSON formatında vakalar üreteceksin.
+Kullaniciya Next.js tabanli bir dedektiflik oyunu icin JSON formatinda vakalar uretiyorsun.
 
-**ÖNEMLİ (KESİN KURAL):**
-- ASLA 'undefined' veya 'NaN' değeri kullanma. 
-- Eğer bir alan boşsa veya opsiyonel ise, alanı tamamen atla veya 'null' değeri kullan. 
-- JSON formatı kesinlikle standartlara uygun olmalı (geçersiz virgül, eksik tırnak vb. olmamalı).
-
-═══════════════════════════════════════════════════════
- SENARYO ÇEŞİTLİLİĞİ — 20+ TİP (ZORUNLU ÇEŞİTLİLİK)
-═══════════════════════════════════════════════════════
-Her vaka üretiminde aşağıdaki senaryo tiplerinden BİRİNİ seç ve özgün şekilde işle.
-Aynı tipi arka arkaya tekrarlama. Seçilen tipi 'theme' alanına yansıt.
-
-1.  **Banka & Finans Soyguncu** — Banka dolandırıcılığı, sahte yatırım şemaları, milyonlarca liranın kaybolması; kurban içeriden birini fark etmiştir.
-2.  **Siyasi Komplo & Kumpas** — Seçim hilesi, rüşvetli belediye yetkilisi, imha edilmeye çalışılan siyasi rakip; basın ve iktidar karanlık işlerde.
-3.  **Sanat Dünyası Katli** — Müzayede sahtekârlığı, çalıntı eser, kıskançlık; bir sanatçının, galericinin ya da koleksiyonerin ölümü.
-4.  **Konak / Miras Dramı** — Büyük bir servetin mirasçıları arasında şiddet; vasiyet değiştirilmiş, avukat rüşvetçi, aile içinde kanlı hesaplaşma.
-5.  **Akademi & Üniversite Cinayeti** — Tez hırsızlığı, kariyer rekabeti; profesör, asistan veya öğrencinin ölümü kampüste.
-6.  **Gazetecilik & İfşa Vakası** — Bir muhabir karanlık bir şeyin üstüne gitmiştir; kaynağı, editörü veya kendisi ölü bulunur.
-7.  **Tarikat & Gizli Örgüt** — Karizmatik bir lider, körü körüne bağlılık, ritüeller; ayrılmak isteyen biri susmak zorunda kalır.
-8.  **Teknoloji & Siber Suç** — Startup iç savaşı, yazılım patenti cinayeti, veri sızdırma; kurban karanlık bir algoritmayı keşfetmiştir.
-9.  **Osmanlı Saray Entrikası** — Harem, Divan-ı Hümayun, paşalar arası güç savaşı; zehir, hançer ve şifreli fermân.
-10. **Liman & Kaçakçılık Ağı** — İstanbul, İzmir veya Trabzon limanında; uyuşturucu, silah ya da antika kaçakçılığı; katil kargo listesinde.
-11. **Tıp & Hastane Skandalı** — Doktor hatası örtbası, organ karaborsası, yanlış ilaç; kurban sağlık sisteminin içinde.
-12. **Spor Dünyası Şikesi** — Futbol, güreş ya da atıcılık; maç şikesi, doping, ölüm tehditlerinin ardından gerçek ölüm.
-13. **Çökmekte Olan Aile İşletmesi** — Fabrika, otel ya da restoran; ortaklar arasında ihanet, işçi ölümlerinin üstünün örtülmesi.
-14. **Noir Dedektif Klasiği** — 1940-1960 İstanbul; karanlık sokaklar, sigara dumanı, çözülemeyen bir geçmişten gelen kadın.
-15. **Diplomatik İmmünite Vakası** — Büyükelçilik, yabancı ajan, uluslararası sır; kurban iki ülke arasında sıkışmış.
-16. **Uçak / Gemi / Tren Cinayeti** — Kapalı alan, sınırlı şüpheli sayısı; seyahat sırasında gerçekleşen mükemmel suç.
-17. **Dini Cemaat & Vakıf Yolsuzluğu** — Hayır kurumu maskesi, bağışların çalınması; kurban gerçeği açıklamak üzereydi.
-18. **Mimari & İnşaat Mafyası** — İhale yolsuzluğu, çürük malzeme, çöken yapılar; müteahhit ve siyasetçi el ele.
-19. **Adliye & Hukuk İçi Çürüme** — Avukat, savcı ya da hâkim arasında; yanlış mahkûmiyet, kirli delil, adalet satılık.
-20. **Gastronomi & Restoran Dünyası** — Ünlü şef, Michelin yıldızı çalıntısı, gizli tarif savaşı; mutfakta cinayet.
-21. **Müzik Endüstrisi & Telif Savaşı** — Besteci, yönetici, idol; telif hakları için öldürme, sahte anlaşmalar.
-22. **Çocukluk Sırrı & Geç İntikam** — Onlarca yıl önce yaşanan bir trajedi; kurban sırrı biliyordu, katil geçmişinden kaçıyor.
-23. **Çevre Suçu & Şirket Örtbası** — Fabrika atıkları, zehirlenen köy, ölümlerin saklanan gerçeği; whistleblower susturulur.
-24. **Osmanlı Dönemi Ticaret Yolu** — İpek yolu kervanı, Ermeni tüccar, Rum esnaf; 1800'lerin İstanbul'unda çok kültürlü gerilim.
+MUTLAK KURALLAR:
+- ASLA 'undefined' veya 'NaN' kullanma; opsiyonel alanlari tamamen atla veya null yap.
+- JSON formati standartlara uygun olmali (virgul, tirnak hatalari yasak).
+- Asagidaki tum kurallari eksiksiz uygula.
 
 ═══════════════════════════════════════════════════════
- KARAKTER ARKETİPLERİ — 30+ TİP (ROTASYON ZORUNLU)
+ SENARYO CESITLILIGI — 24 TIP (ROTASYON ZORUNLU)
 ═══════════════════════════════════════════════════════
-Her vakada şüpheli havuzunu oluştururken aşağıdaki arketip listesinden SEÇ.
-"İş ortağı, eş, kardeş" üçlüsünü TEKRARLAMA. Her vakada farklı kombinasyon kullan.
+Her uretimde asagidaki tiplerden BIRINI sec. Ayni tipi arka arkaya tekrarlama.
 
-**MODERN (Günümüz Türkiye'si):**
-M01. Genç startup kurucusu — Hayallerini satmış, vicdanı ezilmiş
-M02. Sosyal medya fenomeni — Sahte yaşam, gerçek kıskançlık
-M03. Emekli polis dedektifi — Geçmiş davaların lekesi var
-M04. Özel güvenlik şirketi sahibi — Kiralık sır tutucu
-M05. Vergi müfettişi — Rakamlar arkasında ne var biliyor
-M06. Plastik cerrah — Kimlik değiştirme işinin ustası
-M07. Kripto yatırımcısı — Büyük kazanç, büyük borç
-M08. Biyoteknoloji araştırmacısı — Tehlikeli formülün sahibi
-M09. Eski siyasetçi danışmanı — Sırrı satmaya hazır
-M10. Lüks otel müdürü — Her odada bir skandal bilir
-
-**DÖNEM (1920-1980 Türkiye'si):**
-D01. Apartman kapıcısı — Hiçbir şeyi kaçırmaz
-D02. Meyhane sahibi — Söylentilerin merkezi
-D03. Dul bir paşa hanımı — Geçmişi bir hazinedir
-D04. Komünist sempatizan gazeteci — 1960'larda tehlikeli meslek
-D05. İthalatçı tüccar — Karaborsanın çarkını bilen
-D06. Rus Beyaz Muhacir — İstanbul'a sığınmış, sırrı var
-D07. Levanten aile mensubu — Beyoğlu'nun karma dünyasından
-D08. Rum azınlık eczacısı — Şehrin hafızası kendisinde
-D09. 27 Mayıs darbesi sonrası yargılanan general — Kan davası taşıyor
-D10. Radyo spikeri — Sesi herkesin tanıdığı, yüzü kimsenin bilmediği
-
-**OSMANLÜ DÖNEMİ (1450-1920):**
-O01. Kethüda (saray bürokrasi yöneticisi) — Fermânları o hazırlar
-O02. Kapıkulu yeniçerisi — Kanun değil, güç tanır
-O03. Yahudi sarraf — Paranın gücünü bilen
-O04. Rum kuyumcu — İki kültür arasında sıkışmış
-O05. Harem ağası — Sarayın kulakları
-O06. Tımarlı sipahi — Kaybettiği arazi yüzünden kin besliyor
-O07. Kadı (yargıç) — Adaleti şekillendiren ama rüşvete açık
-O08. Frenk (Avrupalı) seyyah — Gizli ajan olduğundan şüpheleniliyor
-O09. Lonca ustası — Esnaf liderliği güç savaşına döndü
-O10. Tekke şeyhi — Mistik güç, dünyevi çıkar
-
-**EVRENSEL / ZAMANÜSTÜüü:**
-E01. Mirasyedi torunu — Serveti bitmiş, gururu kalmış
-E02. Yabancı ülkede yetişmiş Türk — İki kültür arasında, ait değil hiçbirine
-E03. Eski sevgililer arasında sıkışmış üçüncü taraf — Sırdaş değil, suç ortağı
-E04. Çocukluk travmasından kurtulamayan yetişkin — Geçmişe bağlı, o yüzden tehlikeli
-E05. Toplumda itibarlı ama evde farklı biri — Çifte hayat ustası
-E06. Komplo teorileri üzerine kurulan inancın mahkûmu — Paranoyak mı, haklı mı?
-E07. Kendi ölümünü sahneleyerek kaçmaya çalışan — En beklenmedik şüpheli tipi
-E08. Hafızasını yitirmiş tanık — Ne hatırladığı, ne unuttuğu eşit derecede tehlikeli
-E09. Çok zeki ama yalnız çocuk/genç — Yetişkinlerin görmediğini görür
-E10. Sahte kimlikle yaşayan — Asıl geçmiş açılırsa her şey değişir
+1. Banka & Finans Soyguncu
+2. Siyasi Komplo & Kumpas
+3. Sanat Dunyasi Katli
+4. Konak / Miras Drami
+5. Akademi & Universite Cinayeti
+6. Gazetecilik & Ifsa Vakasi
+7. Tarikat & Gizli Orgut
+8. Teknoloji & Siber Suc
+9. Osmanli Saray Entrikasi
+10. Liman & Kacakcilik Agi
+11. Tip & Hastane Skandali
+12. Spor Dunyasi Sikesi
+13. Cokmekte Olan Aile Isletmesi
+14. Noir Dedektif Klasigi
+15. Diplomatik Immunite Vakasi
+16. Ucak / Gemi / Tren Cinayeti
+17. Dini Cemaat & Vakif Yolsuzlugu
+18. Mimari & Insaat Mafyasi
+19. Adliye & Hukuk Ici Curume
+20. Gastronomi & Restoran Dunyasi
+21. Muzik Endustrisi & Telif Savasi
+22. Cocukluk Sirri & Gec Intikam
+23. Cevre Sucu & Sirket Ortbasi
+24. Osmanli Donemi Ticaret Yolu
 
 ═══════════════════════════════════════════════════════
+ MEKAN PALETI — ACIK / KAPALI DENGE (ZORUNLU)
+═══════════════════════════════════════════════════════
 
-Her vaka MUTLAKA şunları içermelidir:
+TEMEL KURAL: Kanitlarin %30-40'i ACIK ALANDA olmali.
+Her vaka sadece ic mekanda gecemez.
 
-**HIKAYE KALİTESİ:**
-- fullStory: En az 5-6 paragraf, zengin atmosfer, olay günü saat saat aktarım, psikolojik derinlik
-- chapters: 3 bölüm halinde açılan hikaye (kanıt buldukça yeni detaylar açılır)
-- setting: Özgün, atmosferik bir mekan ve dönem
-- victim: Mağdurun tam profili, geçmişi, kiminle çatışmaları vardı
+ACIK ALAN MEKAN TIPLERI:
+- Bogaz kiyisi / rihtiim: Islak tas, balikci sandali, marti sesi, sis
+- Iskele / liman rihtiimi: Demir zincir, ficiler, katran kokusu
+- Sahil / kumsal: Dalga sesi, kum uzerinde ayak izi
+- Tarihi kopru alti (Galata, Unkapani): Islak beton, golge, kayiklar
+- Carsi / pazar meydani: Tezgahlar, dar sokak arasi
+- Mezarlik: Sararmis cimen, tas mezar kitabeleri, sessizlik
+- Tren istasyonu peronu / dis hat
+- Park / bahce: Cinar agaclari, sira banklar, tenha yollar
+- Insaat / yikim alani: Beton toz, demir iskelet, issizlik
 
-**KARAKTERLER (4 şüpheli):**
-- Her birinin farklı kişiliği, güçlü motifi, detaylı geçmişi olmalı
-- Arketip listesinden BENZERSİZ kombinasyon seç — aynı vakada benzer roller olmasın
-- **ŞAŞIRTMA (RED HERRING):** Katili bulmak çok kolay olmamalı. En az 2-3 şüpheli, olay yerindeki kanıtlar veya motifleri nedeniyle sona kadar "şüpheli" kalmalı.
-- backstory: Karakterin geçmişi ve mağturla olan karmaşık ilişkisi
-- alibi: Savunması, doğrulanabilir mi değil mi
-- motive: Cinayeti işlemek için nedeni (para, kıskançlık, intikam, korku)
-- Sadece biri gerçekten katil ama tüm kanıtlar ve sorgular birleşmeden kesin sonuç çıkmamalı.
+IC MEKAN TIPLERI:
+- Calisma odasi / kutuphane | Konak / yali salonu
+- Meyhane / restoran mutfagi | Otel odasi / koridor
+- Depo / bodrum | Atolye / studyo
+- Hastane odasi / morgu | Gemi ambari / kamarasi
 
-**KANITLAR (8 ile 12 ADET ARASI — RASTGELE BOYUT KURALI):**
-- **DİNAMİK BOYUT:** Her vakada kanıt sayısı 8 ile 12 arasında rastgele belirlenmelidir. Bu sayıyı sen seç; oyuncu başlangıçta toplam kaç kanıt olduğunu GÖRMEYECEK (UI "0 / ?" formatında gösterir). Sürpriz unsurunu koru.
-- **ASİMETRİK ŞÜPHELİ DAĞILIMI (ZORUNLU):** Her şüphelinin mutlaka bir kanıta sahip olması GEREKMİYOR. Dağılım şu kurala göre yapılmalı:
-  * Bazı şüphelilerin hiç kanıtı olmayabilir (0 kanıt — karakterin tutumu sorguya yansır, ama sahne/bulmacayla bulunacak fiziksel kanıt yoktur).
-  * Bazı şüphelilerin 2 veya 3 kanıtı olabilir (bunlardan biri isHidden: true olabilir).
-  * Katil her zaman en az 2 kanıta sahip olmalı, ama bu kanıtlar oyun ortasına kadar gizli kalabilir.
-  * Dağılım oyuncuyu "bu adamı sorgulasam bir şey çıkar mı?" diye düşündürmeli.
-- Kanıtlar; fiziksel nesneler (anahtar, mendil) olabileceği gibi, somut bir veriyi temsil eden belgeler (banka dökümü, günlük sayfası, eczane fişi, dijital kayıtlar) de olabilir.
-- **YARATICILIK:** Sadece "yerde bulunan bıçak" gibi klasiklerden kaçın. Örn: "Kurbanın banka dökümünde görünen şüpheli bir eczane harcaması", "Katilin olay yerinde unuttuğu, sadece belirli bir terziye ait olan nadir bir düğme", "Kurbanın telefonundaki yarım kalmış bir mesaj".
-- **ERA-SPECIFIC:** Senaryo dönemiyle %100 uyumlu olmalı. (Osmanlı'da banka dökümü olmaz ama mühürlü bir vergi defteri olabilir).
-- **PRESENTABILITY:** Kanıtlar, final suçlamasında "İşte kanıtım!" diyerek masaya konulabilecek netlikte olmalı. Soyut hisler ('Şüpheli yalan söylüyor gibiydi') kanıt SAYILMAZ.
+ACIK ALAN KOORDINAT REHBERI (interactiveObjects):
+Acik alanda perspektif genistir. Ufuk cizgisi usttedir.
+- Ufuk / uzak plan: y: 15-30 (daglar, gemiler, karsi kiyi)
+- Orta plan: y: 35-55 (kiyi cizgisi, iskele, yol)
+- Yakin plan / on: y: 60-85 (kum, tas, zemin nesneleri)
+- Sol: x: 8-25 | Sag: x: 75-92 | Orta: x: 38-62
+- Nesne sayisi: 3-4 (ic mekanda 4-5). Aralarinda en az 20 birim mesafe.
 
-════════════════════════════════════════════════════════════
- BULMACA KURALLARI — KESİN VE DEĞİŞMEZ (ZORUNLU UYUM)
-════════════════════════════════════════════════════════════
+IC MEKAN KOORDINAT REHBERI:
+- Zemin: y: 65-85 | Masa/tezgah: y: 40-60 | Duvar/raf: y: 20-45
+- Sol: x: 10-25 | Sag: x: 75-90 | Orta: x: 40-60
+- Nesne sayisi: 4-5. Aralarinda en az 15 birim mesafe.
 
-**1. MANTIKSAL TUTARLILIK (EN KRİTİK KURAL):**
-Bir bulmaca üretmeden önce şu adımları ZİHNİNDE TAMAMLA:
-  ADIM 1: Cevabı (answer) belirle. Örn: "MURAT"
-  ADIM 2: Şifre tipini seç (aşağıdaki 3 tipten biri).
-  ADIM 3: Seçilen tipe göre şifreli hali ELLE hesapla.
-  ADIM 4: Soruyu (question), bu şifreli hali oyuncuya verecek şekilde yaz.
-  ADIM 5: Şifreli metni tekrar çözerek cevabın "MURAT" olduğunu doğrula.
-  ADIM 6: Ancak bu doğrulamadan sonra JSON'a yaz.
-Bu adımları atlayan veya kısaltan her üretim GEÇERSİZDİR.
+═══════════════════════════════════════════════════════
+ OTOPSI RAPORU SISTEMI — 3 KATMANLI ACILIM (ZORUNLU)
+═══════════════════════════════════════════════════════
 
-**2. İZİN VERİLEN ŞİFRE TİPLERİ (SADECE BU 3'Ü):**
+Her vaka icin otopsi raporu 3 AYRI EVIDENCE olarak uretilir.
+Tek rapor oyuncuya direkt cevap verir — gerilim biter. Bu yuzden katmanli.
 
-  TİP A — Caesar Shift (alfabede kaydırma):
-  • Türk alfabesi sırasıyla: A B C Ç D E F G Ğ H I İ J K L M N O Ö P R S Ş T U Ü V Y Z
-  • +1 kaydırma: Her harfi alfabede bir sonraki harfle değiştir. Son harf (Z) → A'ya döner.
-    Örnek: K-A-T-İ-L → L-B-U-J-M
-  • -1 kaydırma: Her harfi alfabede bir önceki harfle değiştir. İlk harf (A) → Z'ye döner.
-    Örnek: L-B-U-J-M → K-A-T-İ-L
-  • SORU'da kaydırma yönünü (+1 veya -1) MUTLAKA belirt.
-  • YASAK: +2, +3 veya başka miktarda kaydırma kullanma. Sadece +1 veya -1.
+KATMAN 1 — "Ilk Inceleme Raporu" (isHidden: false, baslangicta acik):
+Yuzeysel resmi bulgular. Herkes gorur.
+Icerik: Olum saati tahmini, dis bulgular (ezik, yara izi, renk degisimi).
+"Nasil olduruldugunu" soyler — kimin yaptigini degil.
+clueText: Cikarim gerektiren ama mahkum etmeyen bilgi.
+Ornek: "Boyunda baskinc izleri, sag elini kullanan biriyle uyumlu. Olum saati 22:00-23:30."
 
-  TİP B — Tersten Yazım (en basit ve güvenli tip):
-  • Cevabı tersine çevir, şifreli metin bu olur.
-    Örnek: cevap "KEMAL" → şifreli metin "LAMEK"
-  • SORU'da "Bu metni tersine çevirdiğinde cevabı bulursun" ifadesini kullan.
+KATMAN 2 — "Adli Tip Raporu" (isHidden: false, bulmacayla acilir):
+Derin analiz. Adli bulgu, iz, artik madde, kumac lifi, kimyasal iz.
+Suphe havuzunu daraltir ama kesin degil.
+unlocksEvidenceId: Bir bulmacanin id'si (o bulmaca cozulunce bu katman acilir).
+Ornek: "Tirnak altinda kaba yun kumac lifi. Mide iceriginde nadir bir bitki ozu — Ege'ye ozgu."
 
-  TİP C — İlk Harf Şifresi:
-  • Bir cümle veya kelime listesi ver. Her kelimenin İLK HARFİ sırasıyla cevabı oluşturur.
-    Örnek: cevap "NUR" → "Nisan Uçurtma Rüzgar" → N-U-R ✓
-  • SORU'da "Her kelimenin ilk harfini sırala" ifadesini kullan.
-  • Cümledeki kelime sayısı, cevabın harf sayısıyla AYNI olmalı.
+KATMAN 3 — "Gizli Bulgu Notu" (isHidden: true, sadece sorguyla acilir):
+Resmi rapora girmemis, hekim tarafindan saklanan bulgu.
+Katilin dogrudan izini tasir — ama clueText yine mahkum etmez, sadece isaret eder.
+linkedCharacterId: katilin id'si.
+Ornek: "Kurbanin sol avucunda yari silinnmis harfler. Hekimin ozel dosyasinda sakli."
 
-**3. KESİN YASAKLAR:**
-  ❌ Rastgele harf yığını üretme (KLSFJ, XQPWZ vb.) — BU OYUNU KILITAR. Oyuncu çözemez.
-  ❌ Yukarıdaki 3 tip dışında şifre kullanma (Vigenere, Morse, sembol vs.).
-  ❌ question ile answer arasında mantıksal köprü kurmadan JSON yazma.
-  ❌ "Bu harfler bir önceki harfle şifrelenmiştir" gibi belirsiz açıklamalar.
+DONEM UYUMU:
 
-**4. DOĞRULAMA ZORUNLULUĞU:**
-  Her bulmaca nesnesini JSON'a eklemeden önce içinden şunu söyle:
-  "Soru: [SORU METNİ] → Şifreli: [ŞİFRELİ METİN] → Çözüm adımı: [ADIM ADIM] → Cevap: [CEVAP]"
-  Bu doğrulama başarısız olursa o bulmacayı üretme, farklı bir tane üret.
+MODERN (2000-2026):
+- Dijital PDF, "GIZLI" damgasiyla karatilmis satirlar
+- Toksikoloji raporu, DNA profili, zaman damgasi
+- imagePrompt: "Redacted government autopsy report on a computer screen, some lines blacked
+  out with classified stamps, harsh fluorescent lighting, hyper-realistic photography, 8k"
+- sceneImagePrompt: "Modern forensic lab, stainless steel examination table, fluorescent
+  lights, sealed evidence bags, wide shot, hyper-realistic photography, 8k"
 
-**5. ÖRNEK — DOĞRU ŞİFRE BULMACASI:**
-  {
-    "type": "cipher",
-    "title": "Şifreli Not",
-    "question": "Kurbanın cebinde şu not bulundu: 'MBSBL'. Her harfi Türk alfabesinde bir GERİ (-1) kaydırırsan katili bulursun.",
-    "answer": "LARAK",
-    ... 
-  }
-  ← Doğrulama: M→L, B→A, S→R, B→A, L→K → "LARAK" ✓
+NOIR / 1940-1960:
+- Daktilo yazili, kirmizi kalemle cizilmis satirlar, sigara yanik izi
+- El yazisi doktor notu, eczane dampasi, agir metal zehirlenmesi
+- imagePrompt: "Typewritten autopsy report on yellowed paper, red pencil strikethroughs,
+  cigarette burn on the corner, black and white noir photography, 1950s Istanbul, 35mm lens"
+- sceneImagePrompt: "Dimly lit 1950s Istanbul morgue, stone examination table, single
+  hanging bulb, enamel medical instruments, tiled walls, wide shot, noir photography, 8k"
 
-════════════════════════════════════════════════════════════
- OLAY YERİ NESNE BAĞI — KESİN VE DEĞİŞMEZ (ZORUNLU UYUM)
-════════════════════════════════════════════════════════════
+OSMANLI (1450-1920):
+- "Hekim Basi'nin mudavat defteri" — Osmanlica el yazisi, bazi satirlar kazinmis
+- Muhur baskisi, zehir tanimlamasi, hekimin gizli gorusu
+- imagePrompt: "Ottoman medical examination scroll on aged parchment, Arabic medical
+  script, wax seal impression, faded ink, lines deliberately scratched out,
+  daguerreotype golden tones, candlelight, hyper-realistic photography, 8k"
+- sceneImagePrompt: "Ottoman healer's chamber, low wooden table with copper bowls,
+  dried herbs hanging from ceiling, latticed window with amber light, stone walls,
+  wide shot, hyper-realistic photography, 8k"
 
-**TEMEL KURAL — "SAHNE VARSA BAĞLANTI ZORUNLU":**
-Bir evidence nesnesinin sceneImagePrompt alanı doluysa (yani olay yeri sahnesine sahipse),
-o evidence'ın interactiveObjects listesindeki nesnelerden EN AZ BİRİNİN linkedEvidenceId
-alanı o evidence'ın kendi id'sine eşit OLMAK ZORUNDADIR.
+ENTEGRASYON KURALLARI:
+- id formati: "[caseId]_otopsi_k1", "[caseId]_otopsi_k2", "[caseId]_otopsi_k3"
+- KATMAN_2'nin unlocksEvidenceId → bir bulmacanin id'si olmali
+- KATMAN_3 isHidden: true
+- linkedCharacterId: K1 → null, K2 → supheliyi daraltan, K3 → katil id'si
+- interactiveObjects: Raporun uzerindeki tiklanabilir alanlar.
+  Ornekler: "Silinmis satir" (icon: 🖊️), "Doktor imzasi" (icon: ✍️),
+  "Resmi muhur" (icon: 🔏), "Tarih notu" (icon: 📅)
+  Bu nesneler tiklaninca revealText ile o kismin ne anlam tasidigi gosterilir.
 
-Bu kuralı ihlal etmek oyunun kilitlenmesine neden olur. Oyuncu sahneye girer, her şeye
-tıklar ama hiçbir kanıt çıkmaz — oyun orada durur.
+═══════════════════════════════════════════════════════
+ OLAY YERI FOTOGRAFI — crimeSceneImagePrompt (KOSULLU)
+═══════════════════════════════════════════════════════
 
-**UYGULAMA ADIMLARI (Her evidence için sırayla yap):**
-  ADIM 1: Bu evidence'ın id'sini not et. Örn: "ev_kanit_003"
-  ADIM 2: sceneImagePrompt dolu mu? → Evet ise devam et.
-  ADIM 3: interactiveObjects listesini oluştur (3-5 nesne).
-  ADIM 4: Bu nesnelerden tam olarak BİRİNE linkedEvidenceId: "ev_kanit_003" ekle.
-           (Hangisinin kanıtı "sakladığı" hikayeyle tutarlı olsun — halının altındaki not,
-           vazonun içindeki anahtar, tablonun arkasındaki şifre vb.)
-  ADIM 5: Diğer nesnelerin linkedEvidenceId alanını null veya undefined bırak (onlar
-           sadece atmosfer/dekor nesnesi, tıklanınca revealText gösterir ama kanıt açmaz).
+Asagidaki durumlarda MUTLAKA uret:
+- Ceset acik alanda bulunmussa (kiyi, rihtiim, park, tren rayi)
+- Olay yeri kendisi anlatici bir sahne tasiyorsa (kan izi, bozulmus duzen)
 
-**ÖRNEK — DOĞRU BAĞLANTI:**
-  {
-    "id": "kanit_007",
-    "sceneImagePrompt": "A dusty Ottoman study room...",
-    "interactiveObjects": [
-      { "id": "kanit_007_masa", "label": "Antika Masa", "linkedEvidenceId": null, ... },
-      { "id": "kanit_007_sandik", "label": "Sandık", "linkedEvidenceId": "kanit_007", ... },
-      { "id": "kanit_007_mum", "label": "Sönen Mum", "linkedEvidenceId": null, ... }
-    ]
-  }
-  ← "Sandık" tıklanınca "kanit_007" açılır ✓
+Asagidaki durumlarda null birak:
+- Kapali oda cinayeti ve kanitlar o odayi zaten kapsiyorsa
+- Sahne basit ve ayri gorsele degmeyecekse
 
-**HATA ÖRNEĞİ — YASAK:**
-  "interactiveObjects": [
-    { "id": "obj1", "linkedEvidenceId": null },
-    { "id": "obj2", "linkedEvidenceId": null },  ← HİÇBİRİ BAĞLI DEĞİL!
-    { "id": "obj3", "linkedEvidenceId": null }   ← OYUN KİLİTLENİR!
-  ]
+FORMAT: Ingilizce, wide establishing shot.
+Cesedi veya vahseti dogrudan gosterme — polis seridi, bos ayakkabi,
+daginik esya gibi DOLAYLI ANLATIM. Daha sinematik, daha guclu.
 
-**KOORDİNAT REHBERİ:**
-Nesneleri gerçekçi konumlara yerleştir:
-- Zemin nesneleri (halı, sandık): y: 65-85
-- Masa/tezgah üzeri: y: 40-60
-- Duvar/raf: y: 20-45
-- Sol köşe: x: 10-25
-- Sağ köşe: x: 75-90
-- Orta alan: x: 40-60
-Nesneler birbirinin üstüne gelmesin (aralarında en az 15 birim mesafe olsun).
+Ornek (Bogaz kiyisi):
+"Wide establishing shot of a foggy Istanbul Bosphorus shoreline at dawn, police tape
+strung between rusted bollards, a single shoe half-submerged near the rocks,
+a moored fishing boat in background with lights still on, hyper-realistic photography,
+cinematic lighting, 8k, 35mm lens"
 
-**GÖRSELLER İÇİN imagePrompt FORMATI (IMAGEN-4 OPTIMIZED):**
-- Her imagePrompt şu formülü takip etmeli: [Teknik Stil] + [Konu/İçerik] + [Granüler Dokular] + [Döneme Özgü Atmosfer/Işık] + [Lens Metadatası]
-- Stil Kuralı: "Hyper-realistic photography, 8k resolution, natural skin textures, highly detailed facial features, cinematic lighting, 35mm lens".
-- Önemli: "game-like", "3D render", "digital art", "unreal engine" gibi ifadelerden KAÇIN. Tamamen gerçekçi bir fotoğrafçılık dili kullan.
-- **Örnek 1 (Modern):** "Realistic thriller photography, a broken smartphone on a glass table, neon rain reflections, Istanbul 2026, 8k, authentic textures, 35mm lens"
-- **Örnek 2 (Retro):** "Realistic noir photography, a bloodstained silk tie on a dusty wooden floor, flickering candlelight, 1945, 8k, authentic textures, 35mm lens"
-- **OPERASYONEL KURALLAR:**
-  * imagePrompt alanı ASLA BOŞ OLMAMALI! Tüm kanıtlar ve bulmacalar için özgün, atmosferik İNGİLİZCE promptlar üret.
-  * imagePrompt and sceneImagePrompt alanları vaka için seçilen **DÖNEM (ERA)** ve **TEMA (THEME)** ile %100 uyumlu olmalıdır.
-  * sceneImagePrompt: Mutlaka MEKAN odaklı (Wide Shot) olmalı. Bu mekanda gizli olan 'evidence' nesnesi ile görsel bir uyum içinde olmalıdır.
+Ornek (Tren rayi, Noir):
+"Wide shot of an abandoned 1950s Istanbul train platform at night, single gaslight
+flickering, overturned leather briefcase spilling documents across wet stone,
+a hat rolling near the rail edge, deep shadows, Kodachrome film grain, noir photography"
 
-Dil: TÜRKÇE (Tüm metin içerikleri Türkçe, ama imagePrompt ve sceneImagePrompt İNGİLİZCE olmalı)
-Format: Saf JSON. Hiçbir açıklama, markdown işareti ekleme.
+═══════════════════════════════════════════════════════
+ KARAKTER ARKETIPLERI — ROTASYON ZORUNLU
+═══════════════════════════════════════════════════════
 
-**TEMA VE DÖNEM UYUMU (ÖNEMLİ):**
-- Seçilen temaya göre 'setting' ve 'timeOfDeath' alanlarını güncelle:
-  * Noir/1950s -> 1940-1959 arası
-  * Osmanlı -> 1450-1920 arası
-  * Modern/Sanat/Teknoloji -> Günümüz (2000-2026)
-  * Aile/Konak Dramı -> Temaya göre (Retro veya Modern olabilir)
+"Is ortagi, es, kardess" uclusunu TEKRARLAMA. Her vakada farkli kombinasyon.
 
-JSON Şeması:
+MODERN: Startup kurucusu | Sosyal medya fenomeni | Emekli polis | Guvenlik sirketi sahibi |
+Vergi mufettisi | Plastik cerrah | Kripto yatirimcisi | Biyoteknoloji arastirmacisi |
+Siyasetci danismani | Luks otel muduru
+
+DONEM (1920-1980): Apartman kapicisi | Meyhane sahibi | Dul pasa hanimi | Komunist gazeteci |
+Ithalatci tuccar | Rus Beyaz Muhacir | Levanten aile mensubu | Rum eczaci |
+Yargilanan general | Radyo spikeri
+
+OSMANLI: Kethuda | Yeniceri | Yahudi sarraf | Rum kuyumcu | Harem agasi |
+Timarli sipahi | Kadi | Frenk seyyah | Lonca ustasi | Tekke seyhi
+
+EVRENSEL: Mirasyedi torunu | Yabancida yetismis Turk | Ucuncu taraf sirdas |
+Travmali yetiskin | Cifte hayat ustasi | Olumunu sahneleyerek kacmaya calisan |
+Hafizasini yitirmis tanik | Sahte kimlikle yasayan
+
+═══════════════════════════════════════════════════════
+ KARAKTER DERINLIGI — 5 KATMAN (ZORUNLU)
+═══════════════════════════════════════════════════════
+
+Her karakter icin su 5 katmani MUTLAKA isle:
+
+KATMAN 1 — SOSYAL MASKE:
+Disariya yansitiigi imaj. Mesleki statusu, sosyal cevresi.
+Imaj ile gercegi arasindaki ucurum ne kadar buyukse karakter o kadar cekici.
+
+KATMAN 2 — GIZLI YARA:
+Hayatindaki kirilma noktasi. Cinayetten bagimsiz ama onu etkiler.
+"12 yil once kiz kardesi intihar etti, sorumlu tutugu kisi simdi kurbanin ortagiydi."
+
+KATMAN 3 — KURBANLA ILISKININ GERCEK YUZU:
+"Kurbanin is ortagi" yetmez. Guc dengesi, gizli catismalar, paylasilan sirlar. Min 2 cumle.
+
+KATMAN 4 — ALIBININ ZAYIF NOKTASI:
+Hangi soru sorulursa catliyor? Acikca yaz.
+"Saat 22:30'da evdeydim" → Zayif: "Komssu o saatte isiklarin sondugunu soyluyor."
+
+KATMAN 5 — KONUSMA SESI:
+Karakterin dil kalibi. Egitim, bolgesel agiz, mesleki jargon.
+imagePrompt'a yansiit: jestler, goz ifadesi, duruss, psikolojik hal.
+
+KATIL — SHERLOCK PRENSIBI:
+Ilk sorguda neredeyse mukemmel savunur. 2 supheliyi son ana kadar
+guclu suphe altinda tut. Alibinin zayif noktasi oyunun son ceyregine kadar ortaya cikmasin.
+
+RED HERRING:
+En az 1 masum supheliyle o gece olay yerinde — ama tamamen farkli nedenle.
+
+KRITIK ROL KURALI:
+- "role" alanina ASLA "KATIL", "RED HERRING", "SUCLU" gibi oyun ici teknik terimler yazma.
+- "role" alani sadece kurbanla olan sosyal/is iliskisini belirtmeli (orn: "Eski Es", "Is Ortagi", "Kuzen").
+- Katil olup olmadigi bilgisini sadece "isKiller: true/false" alaninda belirt.
+
+═══════════════════════════════════════════════════════
+ HIKAYE KALITESI (ZORUNLU)
+═══════════════════════════════════════════════════════
+
+fullStory (6-8 PARAGRAF):
+1. Kurbanin o gun nasil basladi. Rutin gorunuyor — degil.
+2. Kurbanin tasidigi sir.
+3-4. Olay oncesi saat saat. Kim neredeydi, son gorusmeler.
+5. Cinayetin gerceklestigi an — gozlemci bakisi, katili aciklama.
+6. Cesedi kim buldu, ilk tepkiler, kanitlarin dagilimi.
+7-8. Katilin psikolojik portresi, gercek motivasyonun arka plani.
+
+setting: Sadece sehir degil — sokak, bina, hava, saat, koku.
+introduction: "Olu bulundu" ile BASLAMA. Sahne kur, gerilim yarat.
+
+═══════════════════════════════════════════════════════
+ KANITLAR (8-12 ADET — ASIMETRIK DAGILIM)
+═══════════════════════════════════════════════════════
+
+Sayi seni belirle (8-12). Oyuncu "0 / ?" gorur — surpriz korunur.
+Otopsi raporunun 3 katmani bu sayiya dahildir.
+
+Dagilim:
+- Bazi suphelilerin 0 kaniti olabilir.
+- Bazilarin 2-3 kaniti (biri isHidden: true).
+- Katil: en az 2 kanit, biri oyun ortasina kadar gizli.
+
+Kalite:
+- Fiziksel nesneler + belge kanitlari karisik.
+- "Yerde bulunan bicak" klisesinden kacin.
+- clueText cikarim gerektirmeli, direkt suclamali degil.
+- %30-40 ACIK ALANDA olmali.
+
+ERA-SPECIFIC:
+- Osmanli: muhurlu ferman, zehir sisesi, ipek kese
+- Noir/1950: siyah-beyaz fotograf, daktilo mektup, sigara paketi
+- Modern: ekran goruntsu, banka dokumu, guvenlik kamera kaydi
+
+═══════════════════════════════════════════════════════
+ BULMACA KURALLARI — KESIN VE DEGISMEZ
+═══════════════════════════════════════════════════════
+
+Uretmeden once ZIHNINDE dogrula:
+ADIM 1: Cevabi belirle.
+ADIM 2: Sifre tipini sec (5 kategoriden biri).
+ADIM 3: Sifreli hali ELLE hesapla.
+ADIM 4: Soruyu yaz.
+ADIM 5: Geri cozererek dogrula.
+ADIM 6: Basariliysa JSON'a yaz.
+
+5 KATEGORI:
+
+KATEGORİ 1 — Caesar Shift:
+Turk alfabesi: A B C C D E F G G H I I J K L M N O O P R S S T U U V Y Z
++1 veya -1 kaydirma. Z→A, A→Z. Sadece +1 veya -1.
+
+KATEGORİ 2 — Tersten Yazim:
+KEMAL → LAMEK. Soru'da "tersine cevir" ifadesi kullan.
+
+KATEGORİ 3 — Ilk Harf Sifresi:
+NUR → Nisan Ucurtma Ruzgar. Kelime sayisi = harf sayisi.
+
+KATEGORİ 4 — Bilmece / Mantik:
+Tek kelime cevap. Cozumsuz birakma. Hint cevaba cok yakin olmasin.
+
+KATEGORİ 5 — Vaka Verisi Bazli:
+Cevap sorgu/kanit yoluyla ogrenilebilir olmali.
+
+YASAKLAR: Rastgele harf yigini. 5 disi sifre. Mantiksiz kopru. Erisilemez veri.
+
+═══════════════════════════════════════════════════════
+ OLAY YERI NESNE BAGI — KESIN VE DEGISMEZ
+═══════════════════════════════════════════════════════
+
+sceneImagePrompt dolu olan her evidence icin interactiveObjects'ten
+EN AZ BIRI linkedEvidenceId = o evidence'in id'si olmali.
+
+Adimlar:
+1. id'yi not et.
+2. sceneImagePrompt dolu mu? → Devam et.
+3. 3-5 nesne olustur (acik alanda 3-4).
+4. Tam 1 nesneye linkedEvidenceId ekle.
+5. Digerleri null (atmosfer nesnesi).
+
+Koordinatlar icin ACIK ALAN / IC MEKAN rehberini kullan.
+
+═══════════════════════════════════════════════════════
+ GORSEL PROMPT KURALLARI — IMAGEN-4 OPTIMIZE
+═══════════════════════════════════════════════════════
+
+FORMAT: [Teknik Stil] + [Konu] + [Psikolojik Atmosfer] + [Donem Dokusu] + [Lens/Isik]
+STIL: "Hyper-realistic photography, 8k, natural textures, cinematic lighting, 35mm lens"
+YASAK: "game-like", "3D render", "digital art", "unreal engine"
+
+KARAKTERIN PSIKOLOJISINI GORSELE YANSIIT:
+- Katil: "Eyes that hold a secret they haven't decided to keep, slight tension in the jaw"
+- Paranoyak masum: "Restless hands, glancing sideways as if expecting accusation"
+- Guclu ama kirigan: "Immaculate posture — but a small unnoticed tremor in the left hand"
+
+DONEM DOKUSU:
+- Noir/1940-60: "Kodachrome film grain, high contrast shadows, cigarette smoke bokeh"
+- Osmanli: "Daguerreotype-inspired golden tones, intricate textile patterns in background"
+- Modern: "Contemporary editorial style, shallow depth of field, urban environment"
+
+SAHNE GORSELLERI (sceneImagePrompt):
+Mekan odakli wide shot. Kanitla gorsel uyum.
+ACIK ALAN ICIN: Ufuk cizgisi, doga isigi, perspektif derinligi ekle.
+"Horizon line visible, atmospheric depth, natural outdoor lighting"
+
+═══════════════════════════════════════════════════════
+ JSON SEMASI
+═══════════════════════════════════════════════════════
+
+Dil: TURKCE (metin). imagePrompt, sceneImagePrompt, crimeSceneImagePrompt → INGILIZCE.
+Format: Saf JSON. Aciklama veya markdown isaretleri ekleme.
+
 {
-  "id": "string (unique UUID format, e.g. 550e8400-e29b-41d4-a716-446655440000)",
+  "id": "string (UUID)",
   "title": "string",
-  "introduction": "string (2-3 cümle özet)",
-  "fullStory": "string (5+ paragraf, zengin, detaylı)",
-  "setting": "string (örn: İstanbul, Moda, 2026 veya Beyoğlu, 1952)",
-  "timeOfDeath": "string (örn: 12 Mayıs, 22:15)",
+  "introduction": "string (2-3 cumle — sahne kur, gerilim yarat, Olu bulundu ile BASLAMA)",
+  "fullStory": "string (6-8 paragraf, atmosferik, saat saat)",
+  "setting": "string (sokak + bina + hava + saat + koku)",
+  "timeOfDeath": "string",
   "causeOfDeath": "string",
-  "crimeScene": "string (olay yeri detaylı tanımı)",
-  "difficultyRating": number (1-5),
+  "crimeScene": "string (Turkce, atmosferik — acik alanda ses/koku/isik belirt)",
+  "crimeSceneImagePrompt": "string veya null (Ingilizce, wide establishing shot, dolayli anlatim)",
+  "difficultyRating": "number (1-5)",
   "theme": "string",
-  "imagePrompt": "string (İngilizce, ana vaka görseli)",
+  "imagePrompt": "string (Ingilizce, ana vaka kapak gorseli)",
   "victim": {
     "name": "string",
-    "age": number,
+    "age": "number",
     "profession": "string",
     "description": "string",
-    "imagePrompt": "string (İngilizce)"
+    "imagePrompt": "string (Ingilizce)"
   },
   "chapters": [
     {
       "id": "string",
       "title": "string",
-      "content": "string (2-3 paragraf, yeni gelişmeler)",
-      "imagePrompt": "string (İngilizce)",
-      "isUnlocked": boolean (ilk bölüm true, diğerleri false),
-      "unlocksAfterEvidenceCount": number (0, 2, 4 gibi)
+      "content": "string (2-3 paragraf)",
+      "imagePrompt": "string (Ingilizce)",
+      "isUnlocked": "boolean",
+      "unlocksAfterEvidenceCount": "number"
     }
   ],
   "characters": [
     {
       "id": "string",
       "name": "string",
-      "role": "string (örn: Maktulün kız kardeşi)",
-      "description": "string",
-      "backstory": "string (detaylı geçmiş)",
-      "alibi": "string (nerede olduğunu iddia ediyor)",
-      "motive": "string (neden yapmış olabilir)",
-      "age": number,
+      "role": "string",
+      "description": "string (SOSYAL MASKE)",
+      "backstory": "string (GIZLI YARA + KURBANLA ILISKI — min 3 cumle)",
+      "alibi": "string (alibi + ZAYIF NOKTA acikca)",
+      "motive": "string (psikolojik zemin + tetikleyici olay)",
+      "age": "number",
       "profession": "string",
       "address": "string",
       "relationToVictim": "string",
-      "isKiller": boolean,
-      "imagePrompt": "string (İngilizce, portre)"
+      "isKiller": "boolean",
+      "imagePrompt": "string (Ingilizce — psikolojik hal yansitilmali)"
     }
   ],
   "evidence": [
@@ -329,25 +420,25 @@ JSON Şeması:
       "id": "string",
       "title": "string",
       "description": "string",
-      "location": "string (kısa, örn: Çalışma Odası)",
-      "locationDescription": "string (Türkçe, atmosferik arama tarifi)",
-      "clueText": "string (bu kanıtın açıkladığı şey)",
-      "linkedCharacterId": "string (veya null)",
-      "isHidden": boolean (isteğe bağlı, true ise sadece sorgu ile açılır),
-      "imagePrompt": "string (İngilizce, kanıt objesi görseli)",
-      "sceneImagePrompt": "string (İngilizce, kanıtın bulunduğu MEKAN/ODA görseli — wide shot)",
-      "isFound": boolean,
+      "location": "string (kisa — acik/kapali belirt: 'Galata Rihtiimi' veya 'Calisma Odasi')",
+      "locationDescription": "string (Turkce, atmosferik — dis mekansa hava/ses/isik)",
+      "clueText": "string (cikarim gerektiren, mahkum etmeyen)",
+      "linkedCharacterId": "string veya null",
+      "isHidden": "boolean",
+      "imagePrompt": "string (Ingilizce)",
+      "sceneImagePrompt": "string (Ingilizce, wide shot — acik alanda ufuk + perspektif derinligi)",
+      "isFound": false,
       "foundAt": null,
       "interactiveObjects": [
         {
-          "id": "string (evidenceId_nesneAdi formatında, örn: ev001_hali)",
-          "label": "string (kısa Türkçe ad)",
-          "x": number (0-100),
-          "y": number (0-100),
+          "id": "string (evidenceId_nesneAdi)",
+          "label": "string (Turkce)",
+          "x": "number",
+          "y": "number",
           "icon": "string (emoji)",
-          "revealText": "string (Türkçe, atmosferik 1-2 cümle)",
+          "revealText": "string (Turkce, atmosferik — dis mekansa ses/koku/hava ipucu)",
           "isRevealed": false,
-          "linkedEvidenceId": "string veya null — sceneImagePrompt varsa EN AZ BİR nesnede bu alan evidence'ın kendi id'si olmalı, diğerleri null"
+          "linkedEvidenceId": "string veya null"
         }
       ]
     }
@@ -359,26 +450,43 @@ JSON Şeması:
       "title": "string",
       "question": "string",
       "answer": "string",
-      "hint": "string (Çözmek için yardımcı ipucu)",
-      "rewardDescription": "string (Çözüldüğünde açılan kanıtın vaka ile bağlantısını ve önemini açıklayan, oyuncuyu yönlendiren 2-3 cümlelik metin)",
+      "hint": "string",
+      "rewardDescription": "string (2-3 cumle)",
       "isSolved": false,
       "difficulty": "easy|medium|hard",
-      "points": number,
+      "points": "number",
       "unlocksEvidenceId": "string",
-      "imagePrompt": "string (İngilizce)"
+      "imagePrompt": "string (Ingilizce)"
     }
   ]
 }
+
+URETIM ONCESI KONTROL LISTESI:
+□ Otopsi: 3 katman evidence uretildi mi? (otopsi_k1, otopsi_k2, otopsi_k3)
+□ Otopsi K1 isHidden: false, K3 isHidden: true mi?
+□ Otopsi K2 bir bulmacanin unlocksEvidenceId'si mi?
+□ Otopsi: Her katman icin donem uyumlu imagePrompt + sceneImagePrompt var mi?
+□ Otopsi: interactiveObjects rapor uzerindeki tiklanabilir alanlar mi?
+□ Mekan: Kanitlarin %30-40'i acik alanda mi?
+□ Acik alan sahne: ufuk cizgisi + perspektif derinligi var mi?
+□ Acik alan koordinatlar dis mekan rehberinden mi?
+□ crimeSceneImagePrompt: Kosl varsa uretildi, yoksa null mu?
+□ Bulmaca: Cevabi once belirledim, elle dogruladim
+□ Bulmaca: KATMAN_2 otopsisini acan bulmacayi dahil ettim
+□ Bulmaca: Rastgele harf yigini uretmedim
 `;
 
-// ─── Spatial Prompt Helper ────────────────────────────────────────────────────
+// ─── Spatial Prompt Helpers ───────────────────────────────────────────────────
 function coordinateToSpatialLabel(x: number, y: number): string {
   const hLabel = x < 25 ? 'far left' : x < 42 ? 'left-center' : x < 58 ? 'center' : x < 75 ? 'right-center' : 'far right';
-  const vLabel = y < 20 ? 'top' : y < 40 ? 'upper' : y < 60 ? 'middle' : y < 78 ? 'lower' : 'bottom';
+  const vLabel = y < 20 ? 'distant/horizon' : y < 35 ? 'upper' : y < 55 ? 'middle' : y < 72 ? 'lower' : 'foreground';
   return `${vLabel} ${hLabel}`;
 }
 
-function injectSpatialContext(scenePrompt: string, objects: { label: string; x: number; y: number; icon: string }[]): string {
+function injectSpatialContext(
+  scenePrompt: string,
+  objects: { label: string; x: number; y: number; icon: string }[]
+): string {
   if (!objects || objects.length === 0) return scenePrompt;
   const placements = objects
     .map(o => `"${o.label}" (${o.icon}) at the ${coordinateToSpatialLabel(o.x, o.y)} of the frame`)
@@ -386,39 +494,172 @@ function injectSpatialContext(scenePrompt: string, objects: { label: string; x: 
   return `${scenePrompt.trimEnd()}, scene must prominently include: ${placements}.`;
 }
 
-export async function generateNewCase(theme: string = "Noir Gerilim"): Promise<Case> {
-  const prompt = `Yeni bir dedektiflik vakası oluştur. 
-Tema: ${theme}
+// =============================================================================
+//  THEME → WORLD-BUILDING CONTEXT MAP
+// =============================================================================
+const THEME_CONTEXT_MAP: Record<string, {
+  worldContext: string;
+  locationPalette: { indoor: string[]; outdoor: string[] };
+  autopsyStyle: 'modern' | 'noir' | 'ottoman';
+  evidenceExamples: string[];
+}> = {
+  "Noir Dedektif Klasigi": {
+    worldContext: `
+Donem: 1940-1960 Istanbul. Beyoglu sokaklarinda Bogaz'dan gelen nemli ruzgar.
+Cicek Pasaji, bozuk kaldirim taslari, gaz lambalari. Raki ve keman.
+Dil: Kisa, kesmeli cumleler. Karakterler "bilmek istemiyorum artik" der.`,
+    locationPalette: {
+      indoor: ["Beyoglu meyhanesi", "Pansiyonda kiralik oda", "Muhasebe burosu", "Pasaj dukani"],
+      outdoor: ["Galata Koprusu alti", "Bogaz rihtiimi", "Taksim meydani", "Tren gari peronu", "Bozuk kaldirimli arka sokak"]
+    },
+    autopsyStyle: 'noir',
+    evidenceExamples: [
+      "Daktilo yazili mektup, kenari yakilmis",
+      "Siyah-beyaz fotograf, arkasinda el yazisi",
+      "Kopru koruluğunda kan lekesi (acik alan)",
+      "Rihtiimda kirik dolma kalem (acik alan)",
+      "Balikci teknesinde muhurlu zarf (acik alan)"
+    ]
+  },
+  "Osmanli Saray Entrikasi": {
+    worldContext: `
+Donem: 1600-1800 Istanbul. Topkapi Sarayi ve cevresindeki guc sarmali.
+Haremin gizli koridorlari, Divan-i Humayun, Galata sarraflari.
+Dil: Agdali, dolayli. "Katil" yerine "eli kanli" derler.`,
+    locationPalette: {
+      indoor: ["Harem dairesi", "Divan-i Humayun", "Saray kutuphanesi", "Sarraf dukani"],
+      outdoor: ["Bogaz iskelesi", "Carsi meydani", "Mezarlik", "Kervansaray avlusu", "Tersane rihtiimi"]
+    },
+    autopsyStyle: 'ottoman',
+    evidenceExamples: [
+      "Muhurlu ferman, bazi satirlar kazinmis",
+      "Zehir sisesi, Arapca etiket",
+      "Iskele tasina kazinmis sembol (acik alan)",
+      "Carsi kuyusuna atilmis kese (acik alan)",
+      "Mezarlik duvarina gizlenmis parça (acik alan)"
+    ]
+  },
+  "Teknoloji & Siber Suc": {
+    worldContext: `
+Donem: 2024-2026 Istanbul. Levent ve Maslak kuleleri, co-working alanlari.
+Startup ekosistemi: gece 3'te coken sunucular, kripto cuzdanlari, NFT dolandiriciliklari.
+Dil: Ingilizce teknik jargon Turkcesiyle karisik. "Pivot", "runway", "exit".`,
+    locationPalette: {
+      indoor: ["Co-working ofisi", "Sunucu odasi", "Startup HQ'su", "Cam toplanti odasi"],
+      outdoor: ["Maslak kuleleri onu", "Bogaz'a bakan teras", "Otopark bodrum kati", "ITU kampus parki"]
+    },
+    autopsyStyle: 'modern',
+    evidenceExamples: [
+      "Sifreli mesaj ekran goruntsu",
+      "VPN log dosyasi",
+      "Otopark guvenlik kamerasi goruntusu (acik alan)",
+      "Kart okuyucu kaydi",
+      "Kripto transfer belgesi"
+    ]
+  },
+  "Liman & Kacakcilik Agi": {
+    worldContext: `
+Donem: Modern veya Noir. Istanbul, Izmir ya da Trabzon limani.
+Katran kokusu, ficiler, demir zincir sesleri. Gece gec saatte bos rihtiim.`,
+    locationPalette: {
+      indoor: ["Liman deposu", "Gumruk ofisi", "Kargo konteyner ici", "Gemi ambari"],
+      outdoor: ["Ana rihtiim", "Iskele", "Sahil yolu", "Balikci barinagi", "Gumruk kapisi onu"]
+    },
+    autopsyStyle: 'modern',
+    evidenceExamples: [
+      "Rihtiim tasindaki kan izi (acik alan)",
+      "Iskele diregine bagli ip ucu (acik alan)",
+      "Denize yari batmis canta (acik alan)",
+      "Sahte gumruk muhuru",
+      "Kargo manifestosunda degistirilmis isim"
+    ]
+  },
+  "Konak / Miras Drami": {
+    worldContext: `
+Mekan secimi: Bogaz yalisi (modern) veya Anadolu kasabasinda buyuk konak (retro).
+Iki nesil: Para kazananlar ve harcayanlar. Aile sirri en az 20 yil once gomulmus.`,
+    locationPalette: {
+      indoor: ["Konak salonu", "Kutuphane", "Yali mutfagi", "Bodrum kat arsivi"],
+      outdoor: ["Bahce / cinar alti", "Bogaz kiyisi iskelesi", "Aile mezarligi", "Ahir / taslik"]
+    },
+    autopsyStyle: 'modern',
+    evidenceExamples: [
+      "Degistirilmis vasiyet",
+      "Eski aile fotografi, yuz cizilmis",
+      "Bahce kuyusuna atilmis nesne (acik alan)",
+      "Mezarlikta birakilan not (acik alan)",
+      "Hizmetcinin el yazisi tanikligi"
+    ]
+  }
+};
 
-Talimatlar:
-- Hikaye çok atmosferik, Türk kültürüne özgü detaylar içermeli (çay, rakı, konak, yalı, esnaf vb.)  
-- Şüphelilerin her birinin maktulle derin, gizemli bir geçmişi olsun
-- Kanıtlar yaratıcı, çağdaş tekniklere uygun (banka kayıtları, eczane fişleri vb.) veya döneme özgü (mühürlü mektuplar, antik objeler) olmalı.
-- Bulmacalar zekice ama adil olmalı - oyuncu ipucuyla çözebilmeli
-- Katil beklenmedik biri olmalı ama mantıklı
-- Her kanıt için mutlaka interactiveObjects listesi üret (3-5 nesne, gerçekçi koordinatlar)
-- sceneImagePrompt her kanıt için ayrı ve MEKAN odaklı olmalı
+// =============================================================================
+//  CASE GENERATION
+// =============================================================================
+export async function generateNewCase(theme: string = "Noir Dedektif Klasigi"): Promise<Case> {
+  const themeData = THEME_CONTEXT_MAP[theme];
 
-BULMACA KONTROL LİSTESİ (Her bulmaca için uygula):
-□ Cevabı önce belirledim
-□ 3 izin verilen şifre tipinden birini seçtim (Caesar +1/-1, Tersten, İlk Harf)
-□ Şifreli metni elle hesapladım ve doğruladım
-□ Soru ile cevap arasında %100 mantıksal köprü kurdum
-□ Rastgele harf yığını üretmedim
+  const themeContextBlock = themeData ? `
+TEMA BAGLAMI:
+${themeData.worldContext}
 
-OLAY YERİ KONTROL LİSTESİ (Her evidence için uygula):
-□ sceneImagePrompt dolu olan her evidence için interactiveObjects içinde en az 1 nesnenin linkedEvidenceId = evidence.id olduğunu doğruladım
-□ Hiçbir sahne "kanıtsız" değil — oyuncu her sahneden bir şey bulabilecek`;
+MEKAN PALETI (Bu vakada kullan):
+  Ic mekanlar: ${themeData.locationPalette.indoor.join(', ')}
+  Acik alanlar: ${themeData.locationPalette.outdoor.join(', ')}
+  Kanitlarin en az %30-40'i acik alanda olmali.
+
+OTOPSI RAPORU STILI: ${themeData.autopsyStyle.toUpperCase()}
+  Bu stile gore 3 katmani uret (prompt kurallarına bak).
+
+DONEM UYUMLU KANITLAR (Ilham icin):
+${themeData.evidenceExamples.map(e => `  - ${e}`).join('\n')}
+` : "";
+
+  const prompt = `Yeni bir dedektiflik vakasi olustur.
+TEMA: ${theme}
+${themeContextBlock}
+
+UY TALIMATLARI:
+
+HIKAYE:
+- introduction: "Olu bulundu" ile BASLAMA. Sahne kur, gerilim yarat.
+- fullStory: 6-8 paragraf. Saat saat. Son paragraf katilin psikolojisi.
+- setting: Sokak + bina + hava + saat.
+- crimeScene: Atmosferik tanim. Acik alan ise koku, ses, isik belirt.
+- crimeSceneImagePrompt: Olay yeri acik alanda veya gorsel olarak anlamliysa uret.
+  Cesedi degil DOLAYLI IZI goster (polis seridi, dusmus esya). Yoksa null.
+
+KARAKTERLER (4 supheliyle — 5 katmanla):
+1. SOSYAL MASKE | 2. GIZLI YARA | 3. KURBANLA ILISKININ GERCEK YUZU
+4. ALIBININ ZAYIF NOKTASI | 5. KONUSMA SESI → imagePrompt'a yansiit
+Katil: Ilk sorguda neredeyse mukemmel savunur.
+RED HERRING: 1 masum supheliyle de o gece olay yerinde — farkli nedenle.
+
+OTOPSI RAPORU (3 KANIT — ZORUNLU):
+□ K1: "[id]_otopsi_k1" — isHidden:false, yuzeysel bulgular, interactiveObjects: silinmis satir/imza/muhur
+□ K2: "[id]_otopsi_k2" — isHidden:false, adli detaylar, bir bulmacanin unlocksEvidenceId'si
+□ K3: "[id]_otopsi_k3" — isHidden:true, gizli bulgu, linkedCharacterId: katil id'si
+
+DIGER KANITLAR:
+- 8-12 toplam (otopsi dahil)
+- %30-40 acik alanda
+- Acik alan sceneImagePrompt: ufuk cizgisi + perspektif derinligi
+- Acik alan interactiveObjects: dis mekan koordinat rehberi
+
+BULMACALAR:
+□ Cevabi once belirledim, elle dogruladim
+□ K2 otopsisini acan bulmacayi dahil ettim
+□ Rastgele harf yigini uretmedim`;
 
   try {
-    let responseText;
+    let responseText: string;
     try {
       const result = await textModel.generateContent({
         contents: [{ role: 'user', parts: [{ text: CASE_SYSTEM_PROMPT }, { text: prompt }] }]
       });
       responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } catch (e) {
-      console.warn("Primary model failed, retrying with Lite model...", e);
+      console.warn("Primary model failed, retrying with Lite...", e);
       const result = await liteModel.generateContent({
         contents: [{ role: 'user', parts: [{ text: CASE_SYSTEM_PROMPT }, { text: prompt }] }]
       });
@@ -431,46 +672,40 @@ OLAY YERİ KONTROL LİSTESİ (Her evidence için uygula):
       .replace(/:\s*undefined\b/g, ": null")
       .trim();
 
-    const parsed = JSON.parse(cleanText) as Case;
+    const parsed = JSON.parse(cleanText) as Case & { crimeSceneImagePrompt?: string | null };
 
-    // ── UUID FIX ──────────────────────────────────────────────────────────
+    if (theme) parsed.theme = theme;
+
+    // UUID fix
     const idIsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.id);
     if (!idIsUuid) {
       const { randomUUID } = await import('crypto');
       parsed.id = randomUUID();
-      console.log(`🆔 [UUID FIX] Geçersiz ID yeni UUID ile değiştirildi: ${parsed.id}`);
+      console.log(`[UUID FIX] ${parsed.id}`);
     }
 
-    // ── Normalize: zorunlu alanların varlığını garantile ──────────────────
     if (!parsed.chapters) parsed.chapters = [];
     if (!parsed.victim) {
       parsed.victim = { name: "Bilinmiyor", age: 0, profession: "", description: "", imagePrompt: "" };
     }
 
-    // ── Evidence normalize + güvenlik kontrolleri ─────────────────────────
+    // Evidence normalize + scene link fix
     if (parsed.evidence) {
       parsed.evidence = parsed.evidence.map(ev => {
         const normalizedObjects = (ev.interactiveObjects || []).map(obj => ({
           ...obj,
-          isRevealed: false, // Her zaman false başlat — güvenlik
+          isRevealed: false,
         }));
 
-        // ── SPATIAL PROMPTING ─────────────────────────────────────────────
         const enrichedScenePrompt = ev.sceneImagePrompt
           ? injectSpatialContext(ev.sceneImagePrompt, normalizedObjects)
           : ev.sceneImagePrompt;
 
-        // ── GÜVENLİK: Sahne varsa ama hiçbir nesne kanıta bağlı değilse ──
-        // Bu kontrol AI'nın "linkedEvidenceId" eklemeyi unuttuğu durumları yakalar.
         if (ev.sceneImagePrompt && normalizedObjects.length > 0) {
           const hasLink = normalizedObjects.some(obj => obj.linkedEvidenceId);
           if (!hasLink) {
-            // İlk nesneyi bu kanıta bağla — oyuncu eli boş dönmesin
             normalizedObjects[0].linkedEvidenceId = ev.id;
-            console.warn(
-              `🔗 [SCENE LINK FIX] "${ev.id}" kanıtının sahnesi bağlantısız bulundu. ` +
-              `İlk nesne ("${normalizedObjects[0].label || normalizedObjects[0].id}") otomatik olarak bağlandı.`
-            );
+            console.warn(`[SCENE LINK FIX] "${ev.id}" → "${normalizedObjects[0].label}" otomatik baglandi.`);
           }
         }
 
@@ -480,23 +715,39 @@ OLAY YERİ KONTROL LİSTESİ (Her evidence için uygula):
           interactiveObjects: normalizedObjects,
         };
       });
+
+      // Otopsi katman dogrulama
+      const autopsyLayers = parsed.evidence.filter(ev =>
+        ev.id?.includes('otopsi_k') ||
+        ev.title?.toLowerCase().includes('otopsi') ||
+        ev.title?.toLowerCase().includes('hekim') ||
+        ev.title?.toLowerCase().includes('mudavat')
+      );
+      if (autopsyLayers.length < 3) {
+        console.warn(`[AUTOPSY WARNING] Beklenen 3 otopsi katmani uretilmedi. Bulunan: ${autopsyLayers.length}`);
+      } else {
+        console.log(`[AUTOPSY OK] 3 katman dogrulandi: ${autopsyLayers.map(e => e.id).join(', ')}`);
+      }
     }
 
-    // ── Puzzle normalize ──────────────────────────────────────────────────
+    // Puzzle normalize
     if (parsed.puzzles) {
       parsed.puzzles = parsed.puzzles.map(p => ({
         ...p,
-        interactiveObjects: p.interactiveObjects || [],
+        interactiveObjects: (p as any).interactiveObjects || [],
       }));
     }
 
     return parsed;
   } catch (error) {
     console.error("JSON Parse Error:", error);
-    throw new Error("AI geçerli bir vaka oluşturamadı. Lütfen tekrar deneyin.");
+    throw new Error("AI gecerli bir vaka olusturamadi. Lutfen tekrar deneyin.");
   }
 }
 
+// =============================================================================
+//  INTERROGATION — TUR BAZLI DINAMIK DAVRANIM
+// =============================================================================
 export async function generateInterrogationResponse(
   caseTitle: string,
   fullStory: string,
@@ -505,73 +756,89 @@ export async function generateInterrogationResponse(
   history: { role: 'user' | 'model'; message: string }[],
   evidenceContext?: string
 ): Promise<string> {
-  const systemPrompt = `
-Sen şu karakteri canlandırıyorsun ve bir sorgu odasındasın:
+  const turnCount = history.length;
+  const isEarlyGame = turnCount < 4;
+  const isMidGame = turnCount >= 4 && turnCount < 10;
+  const isLateGame = turnCount >= 10;
 
-KİŞİLİK: ${character.name}
-ROL: ${character.role}  
+  const systemPrompt = `
+Sen "${caseTitle}" vakasinda asagidaki karakteri canlandiriyorsun.
+Su an bir sorgu odasindasin — karsinda bir dedektif var.
+
+KARAKTER:
+ISIM: ${character.name}
+ROL: ${character.role}
 MESLEK: ${character.profession}
-YAŞ: ${character.age}
-GEÇMIŞ: ${character.backstory || character.description}
-ALİBİ: ${character.alibi || "Belirtilmemiş"}
-MOTİF (GİZLİ): ${character.motive || "Bilinmiyor"}
-KATİL Mİ: ${character.isKiller ? 'EVET - Ama bunu ASLA açıkça söyleme. Yalan söyle, saptır, ama tutarsızlıklar bırak.' : 'HAYIR - Masumiyetini savun. Gerçeği söyler ama diğerlerinden de şüphelenebilirsin.'}
+YAS: ${character.age}
+SOSYAL MASKE: ${character.description}
+GERCEK GECMIS: ${character.backstory || character.description}
+ALIBI: ${character.alibi || "Belirtilmemis"}
+MOTIF (GIZLI): ${character.motive || "Bilinmiyor"}
+KATIL MI: ${character.isKiller
+      ? 'EVET. Bunu ASLA acikca soyleme. Yalan soyle, tutarsizliklar birak. Baski altinda baskasina yonlendir. Zaman kazan. Geretiginde saldirgan ol. Ilk 3-4 soruda neredeyse mukemmel savun.'
+      : 'HAYIR. Masumiyetini savun. Gercegi soyle ama hayal kirikligi ve ofkeni yansiit. Diger suphelliler hakkinda durst gozlemlerini paylasabilirsin.'}
 
 VAKA: ${caseTitle}
-OLAY ÖRGÜSÜ: ${fullStory}
+OLAY ORGUSSU: ${fullStory}
 
-${evidenceContext ? `VAKADAKİ GİZLİ KANITLAR VE ID'LERİ:
-${evidenceContext}
-` : ''}
+${evidenceContext ? `GIZLI KANITLAR (ID listesi — kosseye sikisirsan REVEAL kullan):\n${evidenceContext}` : ''}
 
-DAVRANIŞLAR:
-- Karakterine özel konuşma tarzı ve ağız yapısı kullan
-- Eğer katilsen: tedirgin ol, bazı soruları atlat, başkalarına yönlendir, zaman zaman çelişkiye düş
-- Eğer katil değilsen: savunmacı ama dürüst ol, sana haksız yere şüphelenildiğini hissettir
-- Kısa, doğal, gerçekçi cevaplar ver (2-5 cümle)
-- **BİLGİ PAYLAŞIMI:** Eğer oyuncu mantıklı ve sıkıştırıcı sorular sorarsa, diğer şüpheliler hakkında dedikodular, olay yerinde gördüğün detaylar veya bazı bulmacaların çözümüne ışık tutacak "dolaylı ipuçları" verebilirsin.
-- Türkçe konuş, karakterin eğitim seviyesine/meslekine uygun dil kullan
-- **GİZLİ KANITLAR:** Eğer seninle ilgili veya bildiğin bir "gizli kanıt" varsa (isHidden: true olanlar) ve oyuncu seni gerçekten köşeye sıkıştırırsa veya doğru anahtar kelimeyi söylerse, cevabının sonuna mutlaka [REVEAL:kanit_id] etiketini ekle. Bu etiketi sadece kanıtı gerçekten ağzından kaçırdığında kullan. ID'yi yukarıdaki listeden tam olarak kopyala.
-- Hiçbir zaman "Ben AI'yım" veya oyun mekaniklerine dair hiçbir şey söyleme
+SORGU DINAMIGI — TUR: ${turnCount} (${isEarlyGame ? 'Erken' : isMidGame ? 'Orta' : 'Gec'} Oyun)
+
+${isEarlyGame ? `ERKEN OYUN:
+- Sakin, kontrollu, kendinden emin.
+- Katil: detaylari kendiliinden verme, yuzeysel kal.
+- Masum: neden sen olmadigini anlat.` : ''}
+${isMidGame ? `ORTA OYUN:
+- Katil: Baski artinca savunma catlamaya baslar. Zaman zaman celiskiye dus.
+  "Bunu neden soruyorsunuz?" Baskasina dikkat cek ama cok acik olma.
+- Masum: Hayal kiriklign artar. "Asil su adama bakin" diyebilirsin.` : ''}
+${isLateGame ? `GEC OYUN:
+- Katil: Tutarsizliklar artik saklanamaz. Caresizlikle saldiriya gec.
+  "Beni mahvetmeye mi calisiyorsunuz?" Ama hala direnis var.
+- Masum: Katilin izini farkinda olmadan verebilirsin.` : ''}
+
+KURALLAR:
+- Karakterine ozgu dil: meslek, yas, egitim.
+- 2-5 cumle. Monolog degil, diyalog.
+- Karsi soru sorabilirsin — ozellikle katilin.
+- Turkce. "Ben AI'yim" veya oyun mekanigi yok.
+- Zekice bir kanit vurulursa direkt gecistirme — sonraki turda kucuk catlak olusabilir.
+
+BILGI PAYLASIMI:
+- Mantikli soru gelirse diger supheliler hakkinda gozlem paylasabilirsin.
+- Bulmaca ipuclarini dolayli verebilirsin — farkinda degilmis gibi.
+
+GIZLI KANIT ACMA:
+- Kosseye gercekten sikisirsan cevabinin SONUNA [REVEAL:kanit_id] ekle.
+- ID'yi yukaridaki listeden TAM kopyala. Sadece gercek baskida kullan.
 `;
 
+  const makeChat = (model: string) => vertexAI.getGenerativeModel({
+    model,
+    systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] }
+  });
+
+  const buildHistory = () => history.map(h => ({
+    role: h.role === 'user' ? 'user' : 'model',
+    parts: [{ text: h.message }],
+  }));
+
   try {
-    const chatModel = vertexAI.getGenerativeModel({
-      model: MODEL_NAME,
-      systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] }
-    });
-
-    const chat = chatModel.startChat({
-      history: history.map(h => ({
-        role: h.role === 'user' ? 'user' : 'model',
-        parts: [{ text: h.message }],
-      })),
-    });
-
+    const chat = makeChat(MODEL_NAME).startChat({ history: buildHistory() });
     const result = await chat.sendMessage(question);
     return result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
   } catch (e) {
     console.warn("Interrogation primary model failed, retrying with Lite...", e);
-    const chatModel = vertexAI.getGenerativeModel({
-      model: MODEL_LITE_NAME,
-      systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] }
-    });
-
-    const chat = chatModel.startChat({
-      history: history.map(h => ({
-        role: h.role === 'user' ? 'user' : 'model',
-        parts: [{ text: h.message }],
-      })),
-    });
-
+    const chat = makeChat(MODEL_LITE_NAME).startChat({ history: buildHistory() });
     const result = await chat.sendMessage(question);
     return result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
   }
 }
 
-/**
- * AI-powered puzzle answer evaluator.
- */
+// =============================================================================
+//  PUZZLE EVALUATOR
+// =============================================================================
 export async function evaluatePuzzleAnswer(
   puzzle: any,
   userAnswer: string,
@@ -579,68 +846,55 @@ export async function evaluatePuzzleAnswer(
 ): Promise<{ isCorrect: boolean; feedback: string }> {
   const systemPrompt = `
 Sen bir dedektiflik oyunu bulmaca hakemisin.
-Oyuncunun verdiği cevabı değerlendireceksin.
 
 BULMACA: ${puzzle.question}
-GERÇEK CEVAP: ${puzzle.answer}
+GERCEK CEVAP: ${puzzle.answer}
 OYUNCUNUN CEVABI: ${userAnswer}
 DENEME SAYISI: ${attemptCount}
 
-DEĞERLENDİRME KRİTERLERİ:
-1. Oyuncunun cevabını GERÇEK CEVAP ile karşılaştır. Harfi harfine eşleşme şart değil, anlam olarak doğruysa (yakınsa) kabul et.
-2. Yazım hatalarını görmezden gel.
-3. Eğer cevap yanlışsa, oyuncuya "Sıcak/Soğuk" tarzı bir geri bildirim ver. 
-4. Eğer deneme sayısı ${attemptCount} ise ve hala yanlışsa:
-   - 1-4 arası denemelerde: Sadece küçük bir yönlendirme yap (Sıcak/Soğuk).
-   - 5 ve üzeri denemelerde: Daha detaylı, neredeyse cevabı bulduracak kadar net bir ipucu vermeye başla.
-5. Cevabı doğrudan SÖYLEME. Sadece rehberlik et.
-6. Eğer oyuncu doğru bildiyse, "feedback" alanında onu tebrik et ve başarısını onayla.
-7. Eğer bulmaca bir kanıt açıyorsa (puzzle.unlocksEvidenceId), bu kanıtın önemine dair küçük bir ipucu da feedback'e eklenebilir.
+DEGERLENDIRME:
+1. Buyuk/kucuk harf, Turkce karakter, tek harf yazim hatasi toleransi uygula.
+2. Anlam olarak dogruysa kabul et. Sayisal cevapta tek hane farki veya yazili bicimiyle kabul.
+3. Yanlissa denemeye gore:
+   - 1-3: Sicak/Soguk yonlendirme.
+   - 4-6: Spesifik kanal bilgisi (Sorgu/Sahne/Kanit adi).
+   - 7+: Neredeyse cevabi verecek kadar net.
+4. Cevabi dogrudan SOYLEME.
+5. Dogruysa tebrik et. unlocksEvidenceId varsa kanitin onemine ipucu ver.
 
-ÇIKTI FORMATI: Sadece JSON döndür.
-{
-  "isCorrect": boolean,
-  "feedback": "string (deneme sayısına uygun, etkileyici bir geri bildirim)"
-}
+CIKTI: Sadece JSON.
+{ "isCorrect": boolean, "feedback": "string" }
 `;
 
   try {
-    let responseText;
+    let responseText: string;
     try {
       const result = await liteModel.generateContent({
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
       });
       responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } catch (e) {
-      console.warn("Puzzle evaluation lite model failed, retrying with Flash...", e);
       const result = await textModel.generateContent({
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
       });
       responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
-
-    const text = responseText
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim();
-
+    const text = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const cleanJson = jsonMatch ? jsonMatch[0] : text;
-
-    return JSON.parse(cleanJson);
+    return JSON.parse(jsonMatch ? jsonMatch[0] : text);
   } catch (error) {
     console.error("Puzzle Evaluation Error:", error);
     const basicCorrect = (puzzle.answer || '').toLowerCase().trim() === userAnswer.toLowerCase().trim();
     return {
       isCorrect: basicCorrect,
-      feedback: basicCorrect ? "Tebrikler, doğru cevap!" : "Maalesef, bu doğru değil."
+      feedback: basicCorrect ? "Tebrikler, dogru cevap!" : "Maalesef, bu dogru degil."
     };
   }
 }
 
-/**
- * AI-powered Accusation Evaluator (Grand Reveal)
- */
+// =============================================================================
+//  ACCUSATION EVALUATOR — GRAND REVEAL
+// =============================================================================
 export async function evaluateAccusation(
   caseData: Case,
   suspectId: string,
@@ -655,73 +909,69 @@ export async function evaluateAccusation(
   const suspect = caseData.characters.find(c => c.id === suspectId);
   const killer = caseData.characters.find(c => c.isKiller);
   const selectedEvidence = caseData.evidence.filter(e => selectedEvidenceIds.includes(e.id));
-
   const isCorrectSuspect = suspect?.isKiller || false;
 
   const systemPrompt = `
-Sen bir polisiye oyununun final yüzleşme yönetmenisin. Oyuncunun sunduğu kanıtları ve seçtiği şüpheliyi değerlendirip sinematik bir final yazacaksın.
+Sen bir polisiye oyununun final yuzlesme yonetmenisin.
+Oyuncunun kanitlarini ve sectigi supheliyi degerlendirip sinematik bir final yazacaksin.
 
 VAKA: ${caseData.title}
-OLAY ÖRGÜSÜ: ${caseData.fullStory}
-KATİL: ${killer?.name}
-İTHAM EDİLEN: ${suspect?.name}
+DONEM & MEKAN: ${caseData.setting}
+OLAY ORGUSSU: ${caseData.fullStory}
+KATIL: ${killer?.name} (${killer?.profession}, motif: ${killer?.motive})
+ITHAM EDILEN: ${suspect?.name} (${suspect?.profession})
 SUNULAN KANITLAR: ${selectedEvidence.map(e => `${e.title}: ${e.clueText}`).join(' | ')}
 
-DEĞERLENDİRME KURALLARI:
-1. Eğer İTHAM EDİLEN kişi KATİL ise (isCorrect: true):
-   - "title": Vakaya ve döneme özgü, vurucu bir başlık üret. Sadece "Vaka Çözüldü" deme. (Örn: "Boğaz'ın Sırrı Aydınlandı", "Katil Köşeye Sıkıştı" vb.)
-   - "confrontation": Dedektifin (oyuncunun) sunduğu kanıtları kullanarak katili nasıl yıktığını anlatan, gerilim dolu bir yüzleşme metni (3-4 paragraf). 
-     * DİL: Döneme uygun olsun. Noir ise sert ve dumanlı, Osmanlı ise daha resmi, Modern ise güncel bir dil kullan.
-   - "confession": Katilin suçunu itiraf ettiği, neden yaptığını (motif) açıkladığı ve duygusal/psikolojik bir yıkım yaşadığı final metni.
-   - "scoreModifier": Seçilen kanıtlar katille gerçekten ilgiliyse yüksek puan (1.0), alakasızsa daha düşük (0.7).
+DEGERLENDIRME:
 
-2. Eğer İTHAM EDİLEN kişi KATİL DEĞİLSE (isCorrect: false):
-   - "title": "BÜYÜK BİR HATA", "MASUM BİR KURBAN" gibi vaka tonuna uygun bir başlık.
-   - "confrontation": Şüphelinin dedektifin kanıtlarını nasıl çürüttüğünü, masumiyetini nasıl savunduğunu veya dedektifle nasıl alay ettiğini anlatan bir metin.
-   - "scoreModifier": 0
+1. ITHAM EDILEN KATIL ISE (isCorrect: true):
+   - title: Vakaya ve doneme ozgu, vurucu. "Vaka Cozuldu" DEME.
+     Ornek: "Bogaz'in Sirri Aydinlandi", "Karanlik Hesap Kapatildi", "Son Maske Dustu"
+   - confrontation: 3-4 paragraf. Sunulan kanitlari tek tek kullan.
+     DIL UYUMU: Noir → sert, dumali; Osmanli → resmi; Modern → keskin, cagdas.
+     Son paragrafta katilin maskesi tamamen dusmeli — tek cumleyle cokus ani.
+   - confession: Katilin son sozleri. Motifini aciklar. Gercekci insan sesi.
+   - scoreModifier: Kanitlar katille ilgiliyse 1.0, alakasizsa 0.7.
 
-ÇIKTI FORMATI: Sadece JSON döndür (Markdown \`\`\`json etiketleri OLMADAN).
+2. ITHAM EDILEN KATIL DEGILSE (isCorrect: false):
+   - title: "YANLIS HEDEF", "MASUM BIR KURBAN" gibi.
+   - confrontation: Suphelinin masumiyetini nasil savundugu. Gercek katilin izini farkinda olmadan verebilir.
+   - scoreModifier: 0
+
+CIKTI: Sadece JSON (Markdown etiketleri olmadan).
 {
   "isCorrect": ${isCorrectSuspect},
   "title": "string",
-  "confrontation": "string (Türkçe, sinematik, sürükleyici)",
-  "confession": "string (isteğe bağlı, sadece başarı durumunda)",
+  "confrontation": "string (Turkce, sinematik, 3-4 paragraf)",
+  "confession": "string (sadece basari durumunda)",
   "scoreModifier": number
 }
 `;
 
   try {
-    let responseText;
+    let responseText: string;
     try {
       const result = await textModel.generateContent({
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
       });
       responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } catch (e) {
-      console.warn("Accusation assessment primary model failed, retrying with Lite...", e);
       const result = await liteModel.generateContent({
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
       });
       responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
-
-    const text = responseText
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim();
-
+    const text = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const cleanJson = jsonMatch ? jsonMatch[0] : text;
-
-    return JSON.parse(cleanJson);
+    return JSON.parse(jsonMatch ? jsonMatch[0] : text);
   } catch (error) {
     console.error("Accusation Evaluation Error:", error);
     return {
       isCorrect: isCorrectSuspect,
-      title: isCorrectSuspect ? "Vaka Çözüldü" : "Hatalı İtham",
+      title: isCorrectSuspect ? "Vaka Cozuldu" : "Hatali Itham",
       confrontation: isCorrectSuspect
-        ? "Kanıtlar yanılmaz dedektif. Katil pes etti."
-        : "Bu kanıtlar bu kişiyi suçlamaya yetmez. Büyük bir hata yaptınız.",
+        ? "Kanitlar yaniilmaz dedektif. Katil pes etti."
+        : "Bu kanitlar bu kissiyi suclamaya yetmez. Buyuk bir hata yaptiniz.",
       scoreModifier: isCorrectSuspect ? 1.0 : 0
     };
   }
