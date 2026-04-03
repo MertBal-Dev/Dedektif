@@ -257,12 +257,13 @@ KRITIK ROL KURALI:
 ═══════════════════════════════════════════════════════
 
 fullStory (6-8 PARAGRAF):
-1. Kurbanin o gun nasil basladi. Rutin gorunuyor — degil.
-2. Kurbanin tasidigi sir.
-3-4. Olay oncesi saat saat. Kim neredeydi, son gorusmeler.
-5. Cinayetin gerceklestigi an — gozlemci bakisi, katili aciklama.
-6. Cesedi kim buldu, ilk tepkiler, kanitlarin dagilimi.
-7-8. Katilin psikolojik portresi, gercek motivasyonun arka plani.
+1. Kurbanin o gunu nasil basladi. Rutin gorunuyor ama taşıdığı gizli yükler var.
+2. Kurbanin tasidigi sirrin ipuclari.
+3-4. Olay oncesi saat saat son etkileşimler. Kimlerin orada oldugu (isim vermeden gerilim).
+5. Sessizlik ani — cinayetin islendigi tahmin edilen saatlerdeki atmosfer ve karanlik (KATILI ASLA ACIKLAMA).
+6. Cesedin bulundugu o dehset ani ve ilk tepkiler.
+7-8. Mekanin veya sehrin bu olayla nasil sarsildigi ve geride kalan cevapsiz sorular.
+  *KRITIK: introduction, fullStory ve chapters icinde ASLA katilin ismini, cinayet anini veya motivasyonunu aciklama. Bu alanlar oyuncunun gizemi cozmesi icindir, cozumu ona sunmak icin degil.*
 
 setting: Sadece sehir degil — sokak, bina, hava, saat, koku.
 introduction: "Olu bulundu" ile BASLAMA. Sahne kur, gerilim yarat.
@@ -294,33 +295,93 @@ ERA-SPECIFIC:
  BULMACA KURALLARI — KESIN VE DEGISMEZ
 ═══════════════════════════════════════════════════════
 
-Uretmeden once ZIHNINDE dogrula:
-ADIM 1: Cevabi belirle.
-ADIM 2: Sifre tipini sec (5 kategoriden biri).
-ADIM 3: Sifreli hali ELLE hesapla.
-ADIM 4: Soruyu yaz.
-ADIM 5: Geri cozererek dogrula.
-ADIM 6: Basariliysa JSON'a yaz.
+ALTIN KURAL 1 — CEVAP VAKADAN GELMELI:
+Bulmaca cevabi MUTLAKA vakadaki gercek verilerden biri olmali:
+- Bir SUPHELININ ismi veya soyismi (characters dizisinden)
+- Bir MEKAN adi (evidence veya setting'den)
+- Bir NESNE adi (kanitlarda gecen fiziksel esya)
+- Bir MESLEK veya KAVRAM (vakada gecen gercek bir terim)
+- Bir ZAMAN bilgisi (vakadaki saat, tarih)
 
-5 KATEGORI:
+CEVAP VAKADA GECMEYEN bir isim veya kelime OLAMAZ!
+Ornek: Vakada "Celal", "Nuriye", "Galata" varsa cevaplar bunlardan biri olmali.
+YANLIS: Vakada Ali diye biri yokken cevap "ALI" yapmak.
+DOGRU: Vakadaki katilin ismi "CELAL" ise cevap "CELAL" olabilir.
+
+ALTIN KURAL 2 — ANLAMLI KELIMELER:
+Sifreleme sonucu da anlamli olmali — ornegin Caesar Shift uygulanan metin
+geri cozuldugunde Turkce gercek bir kelime cikmali.
+ASLA "JSDKLK", "BFMRZ", "XYZABC" gibi rastgele harf yigini OLAMAZ.
+
+ALTIN KURAL 3 — BULMACA SENARYOYLA BAGLAMLI OLMALI:
+Bulmaca sorusu vakadaki bir olay, kanit veya karakter ile dogrudan iliskili olmali.
+Soru icindeki hikaye detaylari (mekan, kisi, nesne) vakadaki gercek detaylarla ESMELI.
+"Bir mektupta..." diyorsan o mektup kanitlarda olmali.
+"X kisisi..." diyorsan X vakadaki gercek bir karakter olmali.
+
+Uretmeden once ZIHNINDE dogrula:
+ADIM 1: Vakadaki karakterler, mekanlar ve nesneleri listele.
+ADIM 2: Bunlardan birini CEVAP olarak sec.
+ADIM 3: Sifre tipini sec (10 kategoriden biri).
+ADIM 4: Cevabi sifrele — sifreli hali ELLE hesapla ve yaz.
+ADIM 5: Soruyu yaz — soru icindeki tum isimler ve detaylar vakayla UYUMLU olmali.
+ADIM 6: Sifreli halden geri cozererek orijinal cevaba ulasabildiginni dogrula.
+ADIM 7: Cevap vakada var mi? Bulmaca senaryoyla tutarli mi? Evet → JSON'a yaz. Hayir → ADIM 1'e don.
+
+10 KATEGORI (CESITLILIK ZORUNLU — her vakada farkli kategorilerden sec):
 
 KATEGORİ 1 — Caesar Shift:
-Turk alfabesi: A B C C D E F G G H I I J K L M N O O P R S S T U U V Y Z
+Turk alfabesi: A B C Ç D E F G Ğ H I İ J K L M N O Ö P R S Ş T U Ü V Y Z (29 harf)
 +1 veya -1 kaydirma. Z→A, A→Z. Sadece +1 veya -1.
+ONEMLI: Cevap VAKADAKI bir isim/kelime olmali.
+Ornek: Vakada "CELAL" varsa → -1 ile sifrele: C→B, E→D, L→K, A→Z, L→K → "BDKZK"
+Soruya "BDKZK" yaz, oyuncu +1 yapinca "CELAL" bulur.
+DIKKAT: Sifrelemeden ONCE cevabi belirle, SONRA sifrele. Tersi yapma.
 
 KATEGORİ 2 — Tersten Yazim:
-KEMAL → LAMEK. Soru'da "tersine cevir" ifadesi kullan.
+Vakadaki bir ismi ters yaz. Ornek: Vakada "KEMAL" varsa → "LAMEK" soruya yaz.
+Soru'da "tersine cevir" ifadesi kullan.
 
-KATEGORİ 3 — Ilk Harf Sifresi:
-NUR → Nisan Ucurtma Ruzgar. Kelime sayisi = harf sayisi.
+KATEGORİ 3 — Ilk Harf Sifresi (Akrostis):
+Vakadaki bir isimden akrostis olustur. Cumleler VAKADAKI olaylarla ilgili olmali.
+Ornek: Vakada "NUR" varsa → "Neden Uzaklasmisti Resmen?" → ilk harfler = NUR
 
-KATEGORİ 4 — Bilmece / Mantik:
-Tek kelime cevap. Cozumsuz birakma. Hint cevaba cok yakin olmasin.
+KATEGORİ 4 — Bilmece / Mantik Bulmacasi:
+Klasik bilmece formati. Cevap vakadaki bir NESNE veya KAVRAM olmali.
+Ornek: Vakada defter kaniti varsa → "Yazilanlari saklar, sirlari tutar — nedir?" → DEFTER
 
 KATEGORİ 5 — Vaka Verisi Bazli:
 Cevap sorgu/kanit yoluyla ogrenilebilir olmali.
+Ornek: "Kurban saat kacta olmus?" → Cevap otopsi raporundaki saat.
 
-YASAKLAR: Rastgele harf yigini. 5 disi sifre. Mantiksiz kopru. Erisilemez veri.
+KATEGORİ 6 — Sayi-Harf Donusumu:
+Turk alfabesinde A=1, B=2, C=3, Ç=4... Z=29.
+Vakadaki bir ismi sayilara cevir ve soruya yaz.
+Ornek: Vakada "EFE" varsa → E=5, F=7, E=5 → "5-7-5" soruya yaz.
+
+KATEGORİ 7 — Kelime Icinde Kelime:
+Vakadaki bir ismi bir cumlenin icine gizle.
+Ornek: Vakada "MERT" varsa → "deMERTaşı kaybetti" → gizli isim "MERT"
+
+KATEGORİ 8 — Sembolik Sifre / Rebus:
+Emoji/sembol + harf ile vakadaki bir kelimeyi olustur.
+Ornek: Vakada "AYAN" varsa → "🌙(AY) + AN" → "AYAN"
+
+KATEGORİ 9 — Harf Cikarma / Ekleme:
+Vakadaki bir isim veya kelimeyi donustur.
+Ornek: Vakada "ASLI" varsa → "BASLI kelimesinin ilk harfini cikar" → "ASLI"
+
+KATEGORİ 10 — Koordinat / Izgara Bulmacasi:
+Vakadaki kelimelerden belirli pozisyonlardaki harfleri sec.
+Ornek: Vakada mekanlar "Sahil, Ev, Liman" varsa → "her kelimenin ilk harfi" → "SEL"
+
+YASAKLAR:
+- Rastgele harf yigini (BFMRZ, XYZK gibi) KESINLIKLE YASAK.
+- Vakada OLMAYAN isim veya kelime cevap YASAK (orn: vakada Ali yoksa cevap ALI olamaz).
+- Bulmaca sorusundaki detaylar vakayla CELISMEMELI.
+- Her vakada ayni kategoriyi tekrarlama — en az 3 farkli kategori kullan.
+- Mantiksiz kopru. Erisilemez veri.
+- Sadece Caesar Shift kullanma — cesitlilik ZORUNLU.
 
 ═══════════════════════════════════════════════════════
  OLAY YERI NESNE BAGI — KESIN VE DEGISMEZ
@@ -351,6 +412,16 @@ KARAKTERIN PSIKOLOJISINI GORSELE YANSIIT:
 - Paranoyak masum: "Restless hands, glancing sideways as if expecting accusation"
 - Guclu ama kirigan: "Immaculate posture — but a small unnoticed tremor in the left hand"
 
+KARAKTER-GORSEL UYUMU (KRITIK):
+- Erkek karakter icin imagePrompt'a "male", "man" yaz. ASLA kadinni gordugu gibi uretme.
+- Kadin karakter icin "female", "woman" yaz. ASLA erkekmis gibi uretme.
+- Yas bilgisini imagePrompt'a ekle: "middle-aged man in his 50s", "young woman in her 20s".
+- Meslek ve kiyafet uyumu: doktor → beyaz onluk, isci → is kiyafeti, zengin → sik giyim.
+- Kanit gorselleri ile kanit aciklamasi BIREBIR esmeli:
+  * "Bir kadinin fotografi bulundu" → imagePrompt'ta MUTLAKA "photograph of a woman" olmali.
+  * "Erkek eli yazisi" → imagePrompt'ta "masculine handwriting" olmali.
+  * Fiziksel esya ise gorselde O ESYA net gorunmeli.
+
 DONEM DOKUSU:
 - Noir/1940-60: "Kodachrome film grain, high contrast shadows, cigarette smoke bokeh"
 - Osmanli: "Daguerreotype-inspired golden tones, intricate textile patterns in background"
@@ -371,8 +442,8 @@ Format: Saf JSON. Aciklama veya markdown isaretleri ekleme.
 {
   "id": "string (UUID)",
   "title": "string",
-  "introduction": "string (2-3 cumle — sahne kur, gerilim yarat, Olu bulundu ile BASLAMA)",
-  "fullStory": "string (6-8 paragraf, atmosferik, saat saat)",
+  "introduction": "string (2-3 cumle — sahne kur, gerilim yarat, ASLA spoiler verme)",
+  "fullStory": "string (6-8 paragraf, atmosferik, saat saat, KATILI ACIKLAMA)",
   "setting": "string (sokak + bina + hava + saat + koku)",
   "timeOfDeath": "string",
   "causeOfDeath": "string",
@@ -392,7 +463,7 @@ Format: Saf JSON. Aciklama veya markdown isaretleri ekleme.
     {
       "id": "string",
       "title": "string",
-      "content": "string (2-3 paragraf)",
+      "content": "string (2-3 paragraf, bolum icinde de katili ASLA aciklama)",
       "imagePrompt": "string (Ingilizce)",
       "isUnlocked": "boolean",
       "unlocksAfterEvidenceCount": "number"
@@ -449,14 +520,14 @@ Format: Saf JSON. Aciklama veya markdown isaretleri ekleme.
       "type": "riddle|code|cipher|logic|sequence",
       "title": "string",
       "question": "string",
-      "answer": "string",
+      "answer": "string (MUTLAKA anlamli Turkce kelime veya isim — rastgele harf yigini YASAK)",
       "hint": "string",
       "rewardDescription": "string (2-3 cumle)",
       "isSolved": false,
       "difficulty": "easy|medium|hard",
       "points": "number",
       "unlocksEvidenceId": "string",
-      "imagePrompt": "string (Ingilizce)"
+      "imagePrompt": "string (İngilizce — GÖRSEL İPUCU: Cevapla doğrudan ilişkili görsel. Örnek: Cevap 'ANAHTAR' ise görselde eski bir anahtar; cevap isim ise meslek/özellik görseli olmalı. DOKU VE GERÇEKÇİLİK: 'Handwritten on old paper', 'ink bleeding into parchment', 'physical object with depth'. ASLA 'SARIM' yerine 'ŞARIM' gibi karakter hatası yapma, karakterler tam eşleşmeli. Soyut/alakasız görsel YASAK.)"
     }
   ]
 }
@@ -471,9 +542,16 @@ URETIM ONCESI KONTROL LISTESI:
 □ Acik alan sahne: ufuk cizgisi + perspektif derinligi var mi?
 □ Acik alan koordinatlar dis mekan rehberinden mi?
 □ crimeSceneImagePrompt: Kosl varsa uretildi, yoksa null mu?
-□ Bulmaca: Cevabi once belirledim, elle dogruladim
+□ Bulmaca: Her cevap VAKADAKI gercek bir isim/mekan/nesne mi? (vakada olmayan isim YASAK)
+□ Bulmaca: Soru içindeki hikaye detayları vakadaki gerçek verilerle eşleşti mi?
 □ Bulmaca: KATMAN_2 otopsisini acan bulmacayi dahil ettim
-□ Bulmaca: Rastgele harf yigini uretmedim
+□ Bulmaca: Rastgele harf yigini uretmedim — "BFMRZ" gibi anlamsiz cevap YOK
+□ Bulmaca: En az 3 FARKLI kategori kullandim (sadece Caesar Shift degil!)
+□ Bulmaca: imagePrompt cevapla iliskili gorsel ipucu veriyor mu?
+□ Bulmaca: Her bulmacanin unlocksEvidenceId'si GERCEK bir evidence id'sine baglanmis mi?
+□ Karakter: imagePrompt cinsiyet + yas + meslek ile uyumlu mu? (male/female, yas, kiyafet)
+□ Kanit: Aciklamada "kadin fotografi" yaziyorsa imagePrompt'ta "woman/female" var mi?
+□ Kanit: Aciklamadaki fiziksel esya gorselde net gorunuyor mu?
 `;
 
 // ─── Spatial Prompt Helpers ───────────────────────────────────────────────────
@@ -594,8 +672,218 @@ Iki nesil: Para kazananlar ve harcayanlar. Aile sirri en az 20 yil once gomulmus
 };
 
 // =============================================================================
-//  CASE GENERATION
+//  TURKISH ALPHABET & PUZZLE CIPHER ENGINE
 // =============================================================================
+const TURKISH_ALPHA = 'ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ';
+const TR_UPPER_MAP = new Map<string, number>();
+const TR_INDEX_MAP = new Map<number, string>();
+for (let i = 0; i < TURKISH_ALPHA.length; i++) {
+  TR_UPPER_MAP.set(TURKISH_ALPHA[i], i);
+  TR_INDEX_MAP.set(i, TURKISH_ALPHA[i]);
+}
+const TR_LEN = TURKISH_ALPHA.length; // 29
+
+/** Türk alfabesinde Caesar Shift uygular. shift=+1 → her harf bir sonrakine */
+function caesarShiftTR(text: string, shift: number): string {
+  return text.split('').map(ch => {
+    const upper = ch.toLocaleUpperCase('tr');
+    const idx = TR_UPPER_MAP.get(upper);
+    if (idx === undefined) return ch; // Alfabe dışı karakter (boşluk, nokta vs.)
+    const newIdx = ((idx + shift) % TR_LEN + TR_LEN) % TR_LEN;
+    const newChar = TR_INDEX_MAP.get(newIdx)!;
+    return ch === upper ? newChar : newChar.toLocaleLowerCase('tr');
+  }).join('');
+}
+
+/** Sayı-harf dönüşümü: A=1, B=2 ... Z=29 */
+function numberToLettersTR(numbers: number[]): string {
+  return numbers.map(n => {
+    const idx = n - 1;
+    if (idx < 0 || idx >= TR_LEN) return '?';
+    return TR_INDEX_MAP.get(idx)!;
+  }).join('');
+}
+
+function lettersToNumbersTR(text: string): number[] {
+  return text.split('').map(ch => {
+    const idx = TR_UPPER_MAP.get(ch.toLocaleUpperCase('tr'));
+    return idx !== undefined ? idx + 1 : 0;
+  }).filter(n => n > 0);
+}
+
+/** Kelimenin tersini al */
+function reverseTR(text: string): string {
+  return text.split('').reverse().join('');
+}
+
+/**
+ * AI'ın ürettiği puzzle'ları doğrular ve gerekirse düzeltir.
+ * - Caesar Shift: Cevabı alır, şifreli hali kodda hesaplar, soruyu günceller
+ * - Tersten yazım: Doğruluğu kontrol eder
+ * - Sayı-harf: Doğruluğu kontrol eder
+ * - Diğerleri: Cevabın anlamsız harf yığını olup olmadığını kontrol eder
+ */
+function validateAndFixPuzzles(puzzles: any[]): any[] {
+  // Basit Türkçe kelime kontrolü: en az bir sesli harf ve 2+ karakter
+  // Sayısal cevaplar (kasa numarası, saat, tarih) da geçerli kabul edilir
+  const VOWELS = new Set('AEIİOÖUÜaeıioöuü');
+  const isLikelyMeaningful = (word: string): boolean => {
+    if (word.length < 2) return false;
+    // Tamamen sayısal cevap geçerli (kasa numarası, tarih, saat gibi)
+    if (/^[\d:.\-/]+$/.test(word)) return true;
+    const hasVowel = word.split('').some(ch => VOWELS.has(ch));
+    // Ardışık 4+ sessiz harf varsa anlamsız kabul et
+    const consonantStreak = word.toLocaleUpperCase('tr').split('').reduce(
+      (max, ch) => {
+        if (TR_UPPER_MAP.has(ch) && !VOWELS.has(ch)) return { cur: max.cur + 1, max: Math.max(max.max, max.cur + 1) };
+        return { cur: 0, max: max.max };
+      },
+      { cur: 0, max: 0 }
+    );
+    return hasVowel && consonantStreak.max < 4;
+  };
+
+  return puzzles.map(puzzle => {
+    const p = { ...puzzle };
+    const answer = (p.answer || '').trim();
+    const question = (p.question || '').trim();
+    const type = (p.type || '').toLowerCase();
+
+    // ── Caesar Shift düzeltmesi ──
+    if (type === 'cipher' || type === 'code') {
+      // Soruda "+1" veya "-1" kaydırma ifadesi var mı?
+      const plusMatch = question.match(/\+\s*1/);
+      const minusMatch = question.match(/-\s*1/);
+
+      if (plusMatch || minusMatch) {
+        const playerShift = plusMatch ? 1 : -1; // Oyuncunun yapacağı işlem
+        const encodeShift = -playerShift; // Şifrelemek için ters yön
+
+        // Cevap anlamlı mı kontrol et
+        if (!isLikelyMeaningful(answer)) {
+          console.warn(`[PUZZLE FIX] Caesar cevap "${answer}" anlamsız — düzeltme yapılamadı, puzzle korundu.`);
+          return p;
+        }
+
+        // Şifreli hali kodda hesapla
+        const correctCipher = caesarShiftTR(answer.toLocaleUpperCase('tr'), encodeShift);
+
+        // Doğrulama: geri çöz
+        const decoded = caesarShiftTR(correctCipher, playerShift);
+        if (decoded !== answer.toLocaleUpperCase('tr')) {
+          console.error(`[PUZZLE ERROR] Caesar doğrulama başarısız: ${correctCipher} → ${decoded} ≠ ${answer}`);
+          return p;
+        }
+
+        // Sorudaki eski şifreli metni bul ve değiştir
+        // Genellikle soru içinde tek tırnak veya büyük harflerle yazılmış 2-6 harflik bir kod vardır
+        const cipherPattern = /['']([A-ZÇĞİÖŞÜ]{2,8})['']|['"]([A-ZÇĞİÖŞÜ]{2,8})['"]|'([A-ZÇĞİÖŞÜ]{2,8})'|"([A-ZÇĞİÖŞÜ]{2,8})"/;
+        const cipherMatch = question.match(cipherPattern);
+
+        if (cipherMatch) {
+          const oldCipher = cipherMatch[1] || cipherMatch[2] || cipherMatch[3] || cipherMatch[4];
+          const newQuestion = question.replace(oldCipher, correctCipher);
+          p.question = newQuestion;
+          console.log(`[PUZZLE FIX] Caesar: "${oldCipher}" → "${correctCipher}" (cevap: "${answer}", shift: oyuncu ${playerShift > 0 ? '+' : ''}${playerShift})`);
+        } else {
+          // Şifreli metin tırnak içinde bulunamadı, sorunun sonuna not ekle
+          console.warn(`[PUZZLE FIX] Caesar: şifreli metin tırnak içinde bulunamadı. Soru korundu.`);
+        }
+      }
+    }
+
+    // ── Tersten yazım düzeltmesi ──
+    if (question.toLowerCase().includes('ters') && answer.length >= 2) {
+      const reversed = reverseTR(answer.toLocaleUpperCase('tr'));
+      const reversePattern = /['"]?([A-ZÇĞİÖŞÜ]{2,12})['"]?/;
+      const revMatch = question.match(reversePattern);
+      if (revMatch && revMatch[1] !== reversed) {
+        p.question = question.replace(revMatch[1], reversed);
+        console.log(`[PUZZLE FIX] Reverse: "${revMatch[1]}" → "${reversed}" (cevap: "${answer}")`);
+      }
+    }
+
+    // ── Sayı-Harf Dönüşümü (Kategori 6) düzeltmesi ──
+    if (question.match(/\d+-\d+|\d+\s*=\s*A/) || type.includes('sayı') || type.includes('number')) {
+      const correctNumbers = lettersToNumbersTR(answer.toLocaleUpperCase('tr'));
+      if (correctNumbers.length > 0) {
+        const correctString = correctNumbers.join('-');
+        // Sorudaki sayı dizisini bul (örn: "28-1-15-12" veya "28 1 15 12")
+        const numberPattern = /[\d]+[-\s][\d]+[-\s\d]*/;
+        const numMatch = question.match(numberPattern);
+        if (numMatch && numMatch[0].trim() !== correctString) {
+          p.question = question.replace(numMatch[0].trim(), correctString);
+          console.log(`[PUZZLE FIX] Number-Letter: "${numMatch[0].trim()}" → "${correctString}" (cevap: "${answer}")`);
+        }
+      }
+    }
+
+    // ── Anlamsız cevap kontrolü ──
+    if (!isLikelyMeaningful(answer) && answer.length > 1) {
+      console.warn(`[PUZZLE WARNING] "${answer}" cevabı anlamsız görünüyor (bulmaca: "${p.title}")`);
+    }
+
+    return p;
+  });
+}
+
+// =============================================================================
+//  CASE QUALITY VALIDATION
+// =============================================================================
+interface CaseIssue {
+  type: 'critical' | 'warning';
+  area: 'puzzle' | 'evidence' | 'autopsy' | 'character';
+  message: string;
+}
+
+function validateCaseQuality(parsed: Case): CaseIssue[] {
+  const issues: CaseIssue[] = [];
+
+  // ── Puzzle doğrulaması ──
+  if (parsed.puzzles) {
+    const evidenceIds = new Set((parsed.evidence || []).map(e => e.id));
+
+    for (const p of parsed.puzzles) {
+      // Kanıt bağlantısı yok
+      if (!p.unlocksEvidenceId) {
+        issues.push({ type: 'critical', area: 'puzzle', message: `"${p.title}" hiçbir kanıtı açmıyor (unlocksEvidenceId yok)` });
+      }
+      // Kanıt bağlantısı geçersiz
+      else if (!evidenceIds.has(p.unlocksEvidenceId)) {
+        issues.push({ type: 'critical', area: 'puzzle', message: `"${p.title}" → "${p.unlocksEvidenceId}" evidence'da yok` });
+      }
+    }
+  }
+
+  // ── Evidence sahne doğrulaması ──
+  if (parsed.evidence) {
+    for (const ev of parsed.evidence) {
+      // sceneImagePrompt var ama interactiveObjects yok veya boş
+      if (ev.sceneImagePrompt && (!ev.interactiveObjects || ev.interactiveObjects.length === 0)) {
+        issues.push({ type: 'warning', area: 'evidence', message: `"${ev.title}" sahne prompt'u var ama interactiveObjects boş` });
+      }
+    }
+  }
+
+  // ── Otopsi doğrulaması ──
+  const autopsyLayers = (parsed.evidence || []).filter(ev =>
+    ev.id?.includes('otopsi_k') ||
+    ev.title?.toLowerCase().includes('otopsi') ||
+    ev.title?.toLowerCase().includes('hekim') ||
+    ev.title?.toLowerCase().includes('mudavat')
+  );
+  if (autopsyLayers.length < 3) {
+    issues.push({ type: 'critical', area: 'autopsy', message: `Beklenen 3 otopsi katmanı üretilmedi (${autopsyLayers.length} bulundu)` });
+  }
+
+  return issues;
+}
+
+// =============================================================================
+//  CASE GENERATION (WITH RETRY)
+// =============================================================================
+const MAX_CASE_RETRIES = 2; // İlk üretim + 2 retry = max 3 deneme
+
 export async function generateNewCase(theme: string = "Noir Dedektif Klasigi"): Promise<Case> {
   const themeData = THEME_CONTEXT_MAP[theme];
 
@@ -622,8 +910,8 @@ ${themeContextBlock}
 UY TALIMATLARI:
 
 HIKAYE:
-- introduction: "Olu bulundu" ile BASLAMA. Sahne kur, gerilim yarat.
-- fullStory: 6-8 paragraf. Saat saat. Son paragraf katilin psikolojisi.
+- introduction: SAHNE KUR, gerilim yarat.
+- fullStory: 6-8 paragraf. Katili ASLA aciklama, gizemi sonuna kadar koru.
 - setting: Sokak + bina + hava + saat.
 - crimeScene: Atmosferik tanim. Acik alan ise koku, ses, isik belirt.
 - crimeSceneImagePrompt: Olay yeri acik alanda veya gorsel olarak anlamliysa uret.
@@ -646,12 +934,22 @@ DIGER KANITLAR:
 - Acik alan sceneImagePrompt: ufuk cizgisi + perspektif derinligi
 - Acik alan interactiveObjects: dis mekan koordinat rehberi
 
-BULMACALAR:
-□ Cevabi once belirledim, elle dogruladim
-□ K2 otopsisini acan bulmacayi dahil ettim
-□ Rastgele harf yigini uretmedim`;
+BULMACALAR (KRITIK — DIKKATLE OKU):
+□ Her bulmacanin cevabi VAKADAKI gercek bir isim, mekan veya nesne
+  (orn: suphelinin adi, olay yeri, kanittaki esya — vakada OLMAYAN isim YASAK)
+□ Bulmaca sorusundaki hikaye detaylari vakadaki gercek olaylarla TUTARLI
+□ En az 3 FARKLI bulmaca kategorisi kullandim (sadece Caesar degil!)
+□ Caesar Shift kullandiysam: once cevabi belirledim, sonra ELLE harf harf sifreledim
+□ K2 otopsisini acan bulmacayi dahil ettim — unlocksEvidenceId DOGRU bir evidence id
+□ Rastgele harf yigini uretmedim — cevaplar: GERCEK Turkce kelimeler
+□ Her bulmaca imagePrompt'u cevapla İLİŞKİLİ görsel ipucu tanımladı
+□ Kanit gorselleri ile aciklamalar CINSIYET ve ICERIK olarak eslestirildi`;
 
+  let attempt = 1;
+  while (attempt <= MAX_CASE_RETRIES + 1) {
   try {
+    console.log(`[CASE GENERATION] Deneme ${attempt}/${MAX_CASE_RETRIES + 1} — Tema: "${theme}"`);
+
     let responseText: string;
     try {
       const result = await textModel.generateContent({
@@ -730,19 +1028,108 @@ BULMACALAR:
       }
     }
 
-    // Puzzle normalize
+    // Puzzle normalize + validate/fix ciphers
     if (parsed.puzzles) {
-      parsed.puzzles = parsed.puzzles.map(p => ({
-        ...p,
-        interactiveObjects: (p as any).interactiveObjects || [],
-      }));
+      const evidenceIds = new Set((parsed.evidence || []).map(e => e.id));
+      // Halihazırda başka bir puzzle tarafından zaten açılan kanıt id'lerini bul
+      const alreadyLinkedEvidenceIds = new Set(
+        parsed.puzzles.filter(p => p.unlocksEvidenceId && evidenceIds.has(p.unlocksEvidenceId)).map(p => p.unlocksEvidenceId)
+      );
+
+      parsed.puzzles = validateAndFixPuzzles(parsed.puzzles).map(p => {
+        // unlocksEvidenceId doğrulaması: bağlı kanıt gerçekten var mı?
+        if (p.unlocksEvidenceId && !evidenceIds.has(p.unlocksEvidenceId)) {
+          console.warn(`[PUZZLE LINK FIX] Bulmaca "${p.title}" → unlocksEvidenceId "${p.unlocksEvidenceId}" evidence'da yok!`);
+          p.unlocksEvidenceId = undefined; // Temizle, aşağıda bağlantısızlara otomatik atanacak
+        }
+
+        return {
+          ...p,
+          interactiveObjects: (p as any).interactiveObjects || [],
+        };
+      });
+
+      // Bağlantısız bulmacalara otomatik kanıt ata
+      const unlinkedPuzzles = parsed.puzzles.filter(p => !p.unlocksEvidenceId);
+      if (unlinkedPuzzles.length > 0) {
+        // Henüz hiçbir puzzle'a bağlı olmayan kanıtları bul (otopsi hariç — onlar özel)
+        const availableEvidence = (parsed.evidence || []).filter(e =>
+          !alreadyLinkedEvidenceIds.has(e.id) &&
+          !e.id?.includes('otopsi_k1') // K1 zaten açık
+        );
+
+        // Önce otopsi K2 (henüz bağlı değilse)
+        const autopsyK2 = availableEvidence.find(e =>
+          e.id?.includes('otopsi_k2') || e.title?.toLowerCase().includes('adli tıp')
+        );
+
+        for (const puzzle of unlinkedPuzzles) {
+          // Otopsi K2 henüz bağlı değilse ona bağla
+          if (autopsyK2 && !alreadyLinkedEvidenceIds.has(autopsyK2.id)) {
+            puzzle.unlocksEvidenceId = autopsyK2.id;
+            alreadyLinkedEvidenceIds.add(autopsyK2.id);
+            console.log(`[PUZZLE AUTO-LINK] "${puzzle.title}" → "${autopsyK2.id}" (otopsi K2)`);
+            continue;
+          }
+          // Sonra gizli kanıtlar
+          const hiddenEv = availableEvidence.find(e =>
+            e.isHidden && !alreadyLinkedEvidenceIds.has(e.id)
+          );
+          if (hiddenEv) {
+            puzzle.unlocksEvidenceId = hiddenEv.id;
+            alreadyLinkedEvidenceIds.add(hiddenEv.id);
+            console.log(`[PUZZLE AUTO-LINK] "${puzzle.title}" → "${hiddenEv.id}" (gizli kanıt)`);
+            continue;
+          }
+          // Son çare: henüz bağlanmamış herhangi bir kanıt
+          const anyEv = availableEvidence.find(e => !alreadyLinkedEvidenceIds.has(e.id));
+          if (anyEv) {
+            puzzle.unlocksEvidenceId = anyEv.id;
+            alreadyLinkedEvidenceIds.add(anyEv.id);
+            console.log(`[PUZZLE AUTO-LINK] "${puzzle.title}" → "${anyEv.id}" (fallback)`);
+            continue;
+          }
+          console.warn(`[PUZZLE UNLINKED] "${puzzle.title}" için uygun kanıt bulunamadı — bulmaca ödülsüz kalacak.`);
+        }
+      }
     }
 
+    // ── KALİTE DOĞRULAMA ──
+    const issues = validateCaseQuality(parsed);
+    const criticalIssues = issues.filter(i => i.type === 'critical');
+
+    if (criticalIssues.length > 0) {
+      console.warn(`[CASE QUALITY] ${criticalIssues.length} kritik sorun bulundu:`);
+      criticalIssues.forEach(i => console.warn(`  ⚠ [${i.area}] ${i.message}`));
+    }
+
+    // Hâlâ bağlantısız bulmaca kaldıysa (auto-link de çözemediyse) → retry
+    const stillUnlinked = (parsed.puzzles || []).filter(p => !p.unlocksEvidenceId);
+    if (stillUnlinked.length > 0 && attempt <= MAX_CASE_RETRIES) {
+      console.warn(`[RETRY ${attempt}/${MAX_CASE_RETRIES}] ${stillUnlinked.length} bulmaca hâlâ kanıtsız — yeniden üretiliyor...`);
+      attempt++;
+      continue; // retry döngüsünün başına dön
+    }
+
+    // Tüm uyarıları logla
+    issues.filter(i => i.type === 'warning').forEach(i =>
+      console.warn(`[CASE QUALITY] ⚠ ${i.message}`)
+    );
+
+    console.log(`[CASE READY] Vaka "${parsed.title}" doğrulandı (deneme: ${attempt}, sorun: ${criticalIssues.length} kritik, ${issues.length - criticalIssues.length} uyarı)`);
     return parsed;
-  } catch (error) {
-    console.error("JSON Parse Error:", error);
-    throw new Error("AI gecerli bir vaka olusturamadi. Lutfen tekrar deneyin.");
-  }
+
+    } catch (error) {
+      console.error(`[CASE GENERATION ERROR] Deneme ${attempt}:`, error);
+      if (attempt > MAX_CASE_RETRIES) {
+        throw new Error("AI gecerli bir vaka olusturamadi. Lutfen tekrar deneyin.");
+      }
+      attempt++;
+      console.warn(`[RETRY ${attempt}/${MAX_CASE_RETRIES}] Yeniden üretiliyor...`);
+    }
+  } // end while
+
+  throw new Error("AI gecerli bir vaka olusturamadi. Maksimum deneme sayisina ulasildi.");
 }
 
 // =============================================================================

@@ -522,6 +522,7 @@ export default function GameView({ caseData }: { caseData: Case }) {
                   onFind={(id) => { findEvidenceWithSound(id); showNotification('success', 'Yeni kanıt bulundu! +150 puan'); }}
                   onImageClick={(src, alt) => setLightbox({ src, alt })}
                   allPuzzles={caseData.puzzles}
+                  revealedObjectIds={gameState.revealedObjectIds}
                 />
               )}
               {activeTab === 'puzzles' && (
@@ -884,7 +885,7 @@ function CaseStory({ caseData, foundEvidenceCount, onImageClick }: {
     try {
       setIsLoadingAudio(true);
       const text = `Vaka: ${caseData.title}. ${caseData.introduction || ''}. ${caseData.fullStory}`;
-      const base64 = await generateSpeechAction(text.substring(0, 2000));
+      const base64 = await generateSpeechAction(text);
       const audio = new Audio(`data:audio/mpeg;base64,${base64}`);
       audioRef.current = audio;
       audio.onplay = () => { setIsLoadingAudio(false); setIsReading(true); };
@@ -1150,9 +1151,9 @@ function SuspectsBoard({ characters, suspicionLevels, onInterrogate, onAccuse, o
 }
 
 // ─── EvidenceBoard ────────────────────────────────────────────────────────────
-function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles }: {
+function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles, revealedObjectIds = [] }: {
   evidence: Evidence[]; foundIds: string[]; onFind: (id: string) => void; onImageClick: (s: string, a: string) => void;
-  allPuzzles?: Puzzle[];
+  allPuzzles?: Puzzle[]; revealedObjectIds?: string[];
 }) {
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [searching, setSearching] = useState<string | null>(null);
@@ -1321,12 +1322,29 @@ function EvidenceBoard({ evidence, foundIds, onFind, onImageClick, allPuzzles }:
                         </div>
                       </div>
 
-                      {/* Üst sol köşe: gizem rozeti */}
+                      {/* Üst sol köşe: durum rozeti */}
                       <div className="absolute top-3 left-3 z-10">
-                        <div className="flex items-center gap-1 bg-black/60 border border-white/10 px-2 py-1 rounded-full">
-                          <Search size={9} className="text-gray-500" />
-                          <span className="text-[9px] text-gray-500 font-mono">İncelenmedi</span>
-                        </div>
+                        {(() => {
+                          const objects = item.interactiveObjects || [];
+                          const totalObj = objects.length;
+                          const revealedObj = objects.filter(o => revealedObjectIds.includes(`${item.id}:${o.id}`)).length;
+                          const isComplete = totalObj > 0 && revealedObj === totalObj;
+                          const isPartial = revealedObj > 0 && !isComplete;
+                          return (
+                            <div className={cn(
+                              "flex items-center gap-1 px-2 py-1 rounded-full border",
+                              isComplete ? "bg-amber-950/60 border-amber-500/30" : isPartial ? "bg-amber-950/40 border-amber-800/30" : "bg-black/60 border-white/10"
+                            )}>
+                              {isComplete ? (
+                                <><Sparkles size={9} className="text-amber-400" /><span className="text-[9px] text-amber-400 font-mono">Tarandı</span></>
+                              ) : isPartial ? (
+                                <><Search size={9} className="text-amber-500/60" /><span className="text-[9px] text-amber-500/60 font-mono">{revealedObj}/{totalObj}</span></>
+                              ) : (
+                                <><Search size={9} className="text-gray-500" /><span className="text-[9px] text-gray-500 font-mono">İncelenmedi</span></>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Alt içerik */}

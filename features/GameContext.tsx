@@ -599,18 +599,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const obj = evidence.interactiveObjects?.find(o => o.id === objectId);
     if (!obj) return null;
 
-    if (obj.linkedEvidenceId) {
-      const linkedEv = currentCase.evidence.find(e => e.id === obj.linkedEvidenceId);
-      if (linkedEv?.isHidden) {
-        return `🔒 Bu nesnede gizli bir ipucu var, ancak önce doğru şüpheliyi sorgulayarak bu bilgiyi açığa çıkarmalısın.`;
-      }
-
-      const linkedPuzzle = currentCase.puzzles.find(p => p.unlocksEvidenceId === obj.linkedEvidenceId);
-      if (linkedPuzzle && !linkedPuzzle.isSolved) {
-        return `🧩 Bu nesne bir bulmacayla kilitli. "${linkedPuzzle.title}" bulmacasını çözersen bu kanıta ulaşabilirsin.`;
-      }
-    }
-
+    // Önce nesneyi her durumda "keşfedildi" olarak işaretle (sahne tamamlanabilsin)
     setCurrentCase(prev => {
       if (!prev) return prev;
       return {
@@ -633,7 +622,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
       score: prev.score + 25,
     }));
 
+    // Kanıt bağlantısı varsa: kilit kontrolü yap
     if (obj.linkedEvidenceId) {
+      const linkedEv = currentCase.evidence.find(e => e.id === obj.linkedEvidenceId);
+      if (linkedEv?.isHidden) {
+        return `🔒 Bir iz buldun! Ancak bu kanıtı açmak için önce doğru şüpheliyi sorgulayarak bilgiyi açığa çıkarmalısın.`;
+      }
+
+      const linkedPuzzle = currentCase.puzzles.find(p => p.unlocksEvidenceId === obj.linkedEvidenceId);
+      if (linkedPuzzle && !linkedPuzzle.isSolved) {
+        return `🧩 Bir iz buldun! Ancak bu kanıta ulaşmak için "${linkedPuzzle.title}" bulmacasını çözmelisin.`;
+      }
+
+      // Kilit yoksa kanıtı aç
       findEvidence(obj.linkedEvidenceId);
     }
 
@@ -811,12 +812,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const puzzle = currentCase.puzzles.find(p => p.id === puzzleId);
     if (!puzzle) return null;
 
-    // Kaç kez ipucu istendi bu bulmaca için?
+    // Kaç kez ipucu istendi bu bulmaca için? (sınırsız)
     const currentLevel = (gameState.hintProgress[puzzleId] || 0) + 1;
 
-    // Puan maliyeti: ilk ipucu -50, sonrakiler -75, 3. ve sonrası -100
-    const costMap: Record<number, number> = { 1: 50, 2: 75 };
-    const cost = costMap[currentLevel] ?? 100;
+    // Puan maliyeti: ilk 3 ipucu -50, sonrakiler -25 (sürekli kullanımı cezalandırma)
+    const cost = currentLevel <= 3 ? 50 : 25;
 
     setGameState(prev => ({
       ...prev,
@@ -825,24 +825,44 @@ export function GameProvider({ children }: { children: ReactNode }) {
       hintProgress: { ...prev.hintProgress, [puzzleId]: currentLevel },
     }));
 
-    // Kademeli ipucu metni
+    const answer = puzzle.answer;
+
+    // Kademeli ipucu metni — SINIR YOK, giderek netleşir
     if (currentLevel === 1) {
-      // 1. İpucu: Yüzeysel yönlendirici
-      const half = Math.ceil(puzzle.hint.length / 2);
-      const surface = puzzle.hint.slice(0, half);
-      return `${surface}… (Daha fazlası için tekrar sor)`;
+      // 1. İpucu: Yüzeysel yönlendirici — kelime sınırından kes (yarıda kırpma!)
+      const words = puzzle.hint.split(' ');
+      const halfWordCount = Math.max(1, Math.ceil(words.length / 2));
+      const surface = words.slice(0, halfWordCount).join(' ');
+      return `${surface}… (Daha fazlası için tekrar ipucu iste)`;
     } else if (currentLevel === 2) {
-      // 2. İpucu: Tam ipucu + kanal bilgisi
+      // 2. İpucu: Tam ipucu metni
+      return `${puzzle.hint}`;
+    } else if (currentLevel === 3) {
+      // 3. İpucu: Tam ipucu + hangi kanal ile çözülebileceği
       const channel = puzzle.type === 'logic' || puzzle.type === 'riddle'
         ? 'Şüphelileri sorgulayarak veya kanıtları inceleyerek'
         : 'Bulmacayı dikkatlice okuyarak';
       return `${puzzle.hint} — ${channel} bu bilgiye ulaşabilirsin.`;
+    } else if (currentLevel === 4) {
+      // 4. İpucu: Çok daha net — cevap uzunluğu ve ilk harf
+      const firstChar = answer.charAt(0);
+      return `Cevap ${answer.length} harfli bir kelime ve "${firstChar}" harfi ile başlıyor. ${puzzle.hint}`;
+    } else if (currentLevel === 5) {
+      // 5. İpucu: İlk 2 harf + son harf
+      const start = answer.slice(0, 2);
+      const end = answer.charAt(answer.length - 1);
+      const masked = start + '*'.repeat(Math.max(0, answer.length - 3)) + end;
+      return `Cevap: "${masked}" — ${answer.length} karakter. İlk harfler "${start}", son harf "${end}".`;
+    } else if (currentLevel === 6) {
+      // 6. İpucu: Cevabın yarısını göster
+      const halfLen = Math.ceil(answer.length / 2);
+      const revealed = answer.slice(0, halfLen) + '*'.repeat(answer.length - halfLen);
+      return `Neredeyse tamam: "${revealed}" — gerisi sende.`;
     } else {
-      // 3. İpucu+: Neredeyse cevabı veren "kopya" seviyesi
-      const answerPreview = puzzle.answer.length > 4
-        ? puzzle.answer.slice(0, 2) + '*'.repeat(puzzle.answer.length - 2)
-        : '*'.repeat(puzzle.answer.length);
-      return `Son ipucu: ${puzzle.hint} Cevap şu formatta: "${answerPreview}" — ${puzzle.answer.length} karakter.`;
+      // 7+: Cevabı neredeyse tamamen ver (sadece 1 harf gizli)
+      const hideIdx = Math.max(1, Math.floor(answer.length / 2));
+      const almostFull = answer.slice(0, hideIdx) + '_' + answer.slice(hideIdx + 1);
+      return `Son yardım: "${almostFull}" — eksik harfi tamamla!`;
     }
   }, [currentCase, gameState.hintProgress]);
 
@@ -909,7 +929,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // Genel smart hint için ayrı bir progress key kullan: "smart_hint_global"
     const SMART_KEY = 'smart_hint_global';
     const currentLevel = (gameState.hintProgress[SMART_KEY] || 0) + 1;
-    const cost = currentLevel === 1 ? 50 : currentLevel === 2 ? 75 : 100;
+    const cost = currentLevel <= 3 ? 50 : 25;
 
     const updateHintState = () => {
       setGameState(prev => ({
@@ -920,94 +940,119 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }));
     };
 
-    // 1. Öncelik: Taranmamış sahne içeren, bulunamamış, gizli olmayan kanıt var mı?
+    // Öncelik belirleme: Her kategoriden en acil olanı bul
     const unscannedSceneEvidence = currentCase.evidence.find(ev =>
       !ev.isFound &&
       !ev.isHidden &&
       ev.interactiveObjects && ev.interactiveObjects.length > 0 &&
       !currentCase.puzzles.some(p => p.unlocksEvidenceId === ev.id && !p.isSolved)
     );
-    if (unscannedSceneEvidence) {
-      updateHintState();
-      if (currentLevel === 1) {
-        return {
-          type: 'scene',
-          message: `Olay yerinin bazı köşeleri hâlâ incelenmedi. Belki bir şeyler gözden kaçırdın.`,
-          targetId: unscannedSceneEvidence.id,
-        };
-      } else if (currentLevel === 2) {
-        return {
-          type: 'scene',
-          message: `${unscannedSceneEvidence.location} bölgesinde henüz keşfedilmemiş izler var. Sahneye gir ve her nesneyi tıkla.`,
-          targetId: unscannedSceneEvidence.id,
-        };
-      } else {
-        return {
-          type: 'scene',
-          message: `"${unscannedSceneEvidence.location}" sahnesine gir — özellikle ${unscannedSceneEvidence.interactiveObjects?.[0]?.label || 'dikkat çekici nesneleri'} incele.`,
-          targetId: unscannedSceneEvidence.id,
-        };
-      }
-    }
-
-    // 2. Öncelik: Çözülmemiş bulmaca var mı?
     const unsolvedPuzzle = currentCase.puzzles.find(p => !p.isSolved);
-    if (unsolvedPuzzle) {
-      updateHintState();
-      if (currentLevel === 1) {
-        return {
-          type: 'puzzle',
-          message: `Bulmacalar sekmesinde bekleyen bir şey var. Belki oraya bakmalısın.`,
-          targetId: unsolvedPuzzle.id,
-        };
-      } else if (currentLevel === 2) {
-        return {
-          type: 'puzzle',
-          message: `"${unsolvedPuzzle.title}" bulmacası henüz çözülmedi. Çözersen yeni bir kanıta ulaşabilirsin.`,
-          targetId: unsolvedPuzzle.id,
-        };
-      } else {
-        return {
-          type: 'puzzle',
-          message: `"${unsolvedPuzzle.title}" — Tip: ${unsolvedPuzzle.type}. İpucu al butonunu kullanmayı dene.`,
-          targetId: unsolvedPuzzle.id,
-        };
-      }
-    }
-
-    // 3. Öncelik: Az sorgulanmış şüpheli var mı?
     const leastInterrogated = currentCase.characters
       .map(c => ({ char: c, count: (gameState.interrogationHistory[c.id] || []).length / 2 }))
       .sort((a, b) => a.count - b.count)[0];
 
-    if (leastInterrogated && leastInterrogated.count < 3) {
-      updateHintState();
-      if (currentLevel === 1) {
+    // Her ipucu isteğinde konuya özel sayaç kullan (aynı konuda takılırsa artan netlik)
+    // Farklı konuya geçince o konunun sayacı sıfırdan başlar
+    const getTopicKey = (prefix: string, id?: string) => `smart_${prefix}_${id || 'general'}`;
+
+    // 1. Öncelik: Taranmamış sahne
+    if (unscannedSceneEvidence) {
+      const topicKey = getTopicKey('scene', unscannedSceneEvidence.id);
+      const topicLevel = (gameState.hintProgress[topicKey] || 0) + 1;
+
+      setGameState(prev => ({
+        ...prev,
+        hintsUsed: prev.hintsUsed + 1,
+        score: Math.max(0, prev.score - cost),
+        hintProgress: { ...prev.hintProgress, [SMART_KEY]: currentLevel, [topicKey]: topicLevel },
+      }));
+
+      if (topicLevel <= 3) {
+        const msgs = [
+          `Olay yerinin bazı köşeleri hâlâ incelenmedi. Belki bir şeyler gözden kaçırdın.`,
+          `${unscannedSceneEvidence.location} bölgesinde henüz keşfedilmemiş izler var. Sahneye gir ve nesneleri incele.`,
+          `${unscannedSceneEvidence.location} sahnesinde dikkatle bak — özellikle farklı nesnelere tıkla.`,
+        ];
+        return { type: 'scene' as const, message: msgs[topicLevel - 1], targetId: unscannedSceneEvidence.id };
+      } else {
+        // 4+ net ipucu: doğrudan nesne ve konum
+        const obj = unscannedSceneEvidence.interactiveObjects?.[0];
         return {
-          type: 'interrogation',
-          message: `Bazı şüphelilerle yeterince konuşulmadı. Sorgu odası kritik bilgiler içerebilir.`,
-          targetId: leastInterrogated.char.id,
+          type: 'scene' as const,
+          message: `"${unscannedSceneEvidence.location}" sahnesine gir — ${obj ? `"${obj.label}" nesnesini` : 'dikkat çekici nesneleri'} incele. Orada önemli bir kanıt gizli.`,
+          targetId: unscannedSceneEvidence.id,
         };
-      } else if (currentLevel === 2) {
-        return {
-          type: 'interrogation',
-          message: `${leastInterrogated.char.name} ile daha fazla konuşman gerekiyor. Alibisini ve motifini daha derinlemesine sorgula.`,
-          targetId: leastInterrogated.char.id,
-        };
+      }
+    }
+
+    // 2. Öncelik: Çözülmemiş bulmaca
+    if (unsolvedPuzzle) {
+      const topicKey = getTopicKey('puzzle', unsolvedPuzzle.id);
+      const topicLevel = (gameState.hintProgress[topicKey] || 0) + 1;
+
+      setGameState(prev => ({
+        ...prev,
+        hintsUsed: prev.hintsUsed + 1,
+        score: Math.max(0, prev.score - cost),
+        hintProgress: { ...prev.hintProgress, [SMART_KEY]: currentLevel, [topicKey]: topicLevel },
+      }));
+
+      if (topicLevel <= 3) {
+        const msgs = [
+          `Bulmacalar sekmesinde bekleyen bir şey var. Belki oraya bakmalısın.`,
+          `"${unsolvedPuzzle.title}" bulmacası henüz çözülmedi. Çözersen yeni bir kanıta ulaşabilirsin.`,
+          `"${unsolvedPuzzle.title}" — Tip: ${unsolvedPuzzle.type}. Bulmaca sayfasındaki ipucu butonunu dene.`,
+        ];
+        return { type: 'puzzle' as const, message: msgs[topicLevel - 1], targetId: unsolvedPuzzle.id };
       } else {
         return {
-          type: 'interrogation',
-          message: `${leastInterrogated.char.name} — "${leastInterrogated.char.motive ? 'motifleri' : 'alibisi'}" hakkında doğrudan sorular sor. Köşeye sıkıştırırsan ağzından bir şeyler kaçırabilir.`,
+          type: 'puzzle' as const,
+          message: `"${unsolvedPuzzle.title}" bulmacasında takıldıysan, bulmaca sayfasından "İpucu Al" butonuna birkaç kez bas — her seferinde daha net bir ipucu alacaksın.`,
+          targetId: unsolvedPuzzle.id,
+        };
+      }
+    }
+
+    // 3. Öncelik: Az sorgulanmış şüpheli
+    if (leastInterrogated && leastInterrogated.count < 3) {
+      const topicKey = getTopicKey('interrogation', leastInterrogated.char.id);
+      const topicLevel = (gameState.hintProgress[topicKey] || 0) + 1;
+
+      setGameState(prev => ({
+        ...prev,
+        hintsUsed: prev.hintsUsed + 1,
+        score: Math.max(0, prev.score - cost),
+        hintProgress: { ...prev.hintProgress, [SMART_KEY]: currentLevel, [topicKey]: topicLevel },
+      }));
+
+      if (topicLevel <= 3) {
+        const msgs = [
+          `Bazı şüphelilerle yeterince konuşulmadı. Sorgu odası kritik bilgiler içerebilir.`,
+          `${leastInterrogated.char.name} ile daha fazla konuşman gerekiyor. Alibisini ve motifini daha derinlemesine sorgula.`,
+          `${leastInterrogated.char.name} — alibisi hakkında doğrudan sorular sor. Baskı uygularsan bilgi sızabilir.`,
+        ];
+        return { type: 'interrogation' as const, message: msgs[topicLevel - 1], targetId: leastInterrogated.char.id };
+      } else {
+        return {
+          type: 'interrogation' as const,
+          message: `${leastInterrogated.char.name}'e "${leastInterrogated.char.motive ? 'motifini' : 'alibisini'}" sorgula. Çelişkileri yakalayıp vurgula — köşeye sıkışınca ağzından kaçırabilir.`,
           targetId: leastInterrogated.char.id,
         };
       }
     }
 
-    // 4. Genel yönlendirme
+    // 4. Genel yönlendirme (sınır yok)
     updateHintState();
+    const generalMsgs = [
+      'Tüm fiziksel kanıtları topladın gibi görünüyor. Şüphelilerin çapraz ifadelerini karşılaştır — biri yalan söylüyor.',
+      'Şüphelilerin alibilerini birbirleriyle karşılaştır. Zaman çizelgesinde bir çelişki var.',
+      'Kanıtlardaki ipucu metinlerini dikkatle oku — birden fazla kanıt aynı kişiyi işaret ediyor olabilir.',
+      'Otopsi raporlarını katman katman incelediysen, sorgu odasında baskıyı artır. Gerçek katil basınç altında çatlayacak.',
+    ];
     return {
-      type: 'interrogation',
-      message: 'Tüm fiziksel kanıtları topladın gibi görünüyor. Şüphelilerin çapraz ifadelerini karşılaştır — biri yalan söylüyor.',
+      type: 'interrogation' as const,
+      message: generalMsgs[Math.min(currentLevel - 1, generalMsgs.length - 1)],
     };
   }, [currentCase, gameState.interrogationHistory, gameState.hintProgress]);
 

@@ -16,13 +16,32 @@ function splitTextIntoChunks(text: string, maxChars: number = 800): string[] {
   let currentChunk = "";
 
   for (const p of paragraphs) {
-    if ((currentChunk + p).length > maxChars && currentChunk.length > 0) {
-      chunks.push(currentChunk.trim());
-      currentChunk = p + " ";
+    // Eğer bir paragraf tek başına maxChars'tan büyükse, cümlelere böl
+    if (p.length > maxChars) {
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk.trim());
+        currentChunk = "";
+      }
+      
+      const sentences = p.split(/(?<=[.!?])\s+/);
+      for (const s of sentences) {
+        if ((currentChunk + s).length > maxChars && currentChunk.length > 0) {
+          chunks.push(currentChunk.trim());
+          currentChunk = s + " ";
+        } else {
+          currentChunk += s + " ";
+        }
+      }
     } else {
-      currentChunk += p + " ";
+      if ((currentChunk + p).length > maxChars && currentChunk.length > 0) {
+        chunks.push(currentChunk.trim());
+        currentChunk = p + " ";
+      } else {
+        currentChunk += p + " ";
+      }
     }
   }
+  
   if (currentChunk.trim().length > 0) chunks.push(currentChunk.trim());
   return chunks;
 }
